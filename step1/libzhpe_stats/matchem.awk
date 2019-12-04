@@ -5,7 +5,7 @@
    }
    else
    {
-       if (data[$2] != 0)
+       if ((data[$2] != 0) && ($2 != 0))
        {
            printf("subid: %s; typeid: %s; val1: %d\n",$2, $1, $3 - data[$2]);
        }
