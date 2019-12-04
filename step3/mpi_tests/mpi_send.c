@@ -40,6 +40,12 @@
 
 #include <zhpe_stats.h>
 
+#define NOP1    \
+do {            \
+    nop();      \
+} while (0)
+
+
 int main(int argc, char **argv)
 {
     int                 ret = 1;
@@ -65,6 +71,27 @@ int main(int argc, char **argv)
         zhpe_stats_start(0);
         zhpe_stats_start(10);
         zhpe_stats_disable();
+
+    zhpe_stats_enable();
+    zhpe_stats_start(88);
+    zhpe_stats_stop(88);
+    zhpe_stats_start(89);
+    NOP1;
+    zhpe_stats_stop(89);
+
+    zhpe_stats_start(90);
+    NOP1;
+    NOP1;
+    NOP1;
+    NOP1;
+    NOP1;
+    NOP1;
+    NOP1;
+    NOP1;
+    NOP1;
+    NOP1;
+    zhpe_stats_stop(90);
+    zhpe_stats_disable();
     }
 
     if (MPI_Init(&argc, &argv) != MPI_SUCCESS)
@@ -95,6 +122,27 @@ int main(int argc, char **argv)
     zhpe_stats_enable();
     zhpe_stats_stop(10);
     zhpe_stats_start(20);
+    zhpe_stats_disable();
+
+    zhpe_stats_enable();
+    zhpe_stats_start(88);
+    zhpe_stats_stop(88);
+    zhpe_stats_start(89);
+    NOP1;
+    zhpe_stats_stop(89);
+
+    zhpe_stats_start(90);
+    NOP1;
+    NOP1;
+    NOP1;
+    NOP1;
+    NOP1;
+    NOP1;
+    NOP1;
+    NOP1;
+    NOP1;
+    NOP1;
+    zhpe_stats_stop(90);
     zhpe_stats_disable();
 
     if (!n_rank) {

@@ -42,7 +42,26 @@
 
 #include <asm/bitsperlong.h>
 
-static_assert(sizeof(struct zhpe_stats_record)%64 == 0, "foo"); 
+#include <linux/perf_event.h>
+
+static_assert(sizeof(struct zhpe_stats_record)%64 == 0, "foo");
+
+
+#define rdpmc(counter,low, high) \
+     __asm__ __volatile__("rdpmc" \
+        : "=a" (low), "=d" (high) \
+        : "c" (counter))
+
+/* copied from perf_event_open man page */
+static long perf_event_open(struct perf_event_attr *pea, pid_t pid,
+               int cpu, int group_fd, unsigned long flags)
+{
+    int ret;
+
+    ret = syscall(__NR_perf_event_open, pea, pid, cpu,
+                  group_fd, flags);
+    return ret;
+}
 
 /* John Byrne's asm magic */
 #define __XMMCLOBBER03  : "%xmm0", "%xmm1", "%xmm2", "%xmm3"
@@ -191,6 +210,12 @@ static pthread_mutex_t  zhpe_stats_mutex = PTHREAD_MUTEX_INITIALIZER;
 static bool             zhpe_stats_init_once;
 static uint64_t         zhpe_stats_buf_count;
 static size_t           zhpe_stats_profile;
+
+int hw_instr_fd;
+uint64_t hw_instr_counter;
+
+int cpu_cyc_fd;
+uint64_t cpu_cyc_counter;
 
 /* forward declarations */
 void zhpe_stats_flush(struct zhpe_stats *stats);
@@ -397,9 +422,15 @@ static void stats_rdtscp_setvals(struct zhpe_stats_record *rec)
 
 static void stats_cpu_setvals(struct zhpe_stats_record *rec)
 {
+    unsigned int cnt2low, cnt2high;
+    unsigned int cnt3low, cnt3high;
+
     rec->val1 = do_rdtscp();
-    rec->val2 = 0;
-    rec->val3 = 0;
+    rdpmc(hw_instr_counter, cnt2low, cnt2high);
+    rdpmc(cpu_cyc_counter, cnt3low, cnt3high);
+
+    rec->val2 = ((long long)cnt2low) | ((long long)cnt2high ) << 32;
+    rec->val3 = ((long long)cnt3low) | ((long long)cnt3high ) << 32;
     rec->val4 = 0;
     rec->val5 = 0;
 }
@@ -502,6 +533,18 @@ static void stats_key_destructor(void *vstats)
 void stats_finalize()
 {
     stats_cmn_finalize();
+
+    if (hw_instr_fd != -1)
+    {
+       close(hw_instr_fd);
+       hw_instr_fd=-1;
+    }
+
+    if (cpu_cyc_fd != -1)
+    {
+       close(cpu_cyc_fd);
+       cpu_cyc_fd=-1;
+    }
 }
 
 static void stats_start(struct zhpe_stats *stats, uint32_t subid)
@@ -615,6 +658,85 @@ static struct zhpe_stats_ops stats_ops_perf_event = {
     .saveme             = stats_nop_saveme,
 };
 
+static void init_cpu_profile()
+{
+    struct perf_event_attr pe1, pe2;
+    int            err;
+
+    int hw_instr_fd,cpu_cyc_fd;
+    void *addr1, *addr2;
+
+    uint64_t index1, offset1;
+
+    uint64_t index2, offset2;
+
+    /* first counter is group leader */
+    memset(&pe1, 0, sizeof(struct perf_event_attr));
+    pe1.size = sizeof(struct perf_event_attr);
+    pe1.type = PERF_TYPE_HARDWARE;
+    pe1.config = PERF_COUNT_HW_INSTRUCTIONS;
+    pe1.exclude_kernel = 1;
+
+    hw_instr_fd = perf_event_open(&pe1, 0, -1, -1, 0);
+    if (hw_instr_fd < 0) {
+        err = errno;
+        fprintf(stderr, "Error hw_instr_fd == %d; perf_event_open %llx returned error %d:%s\n", hw_instr_fd, pe1.config,
+            err, strerror(err));
+        exit(EXIT_FAILURE);
+    }
+
+    /* mmap the group leader file descriptor */
+    addr1 = mmap(NULL, 4096, PROT_READ, MAP_SHARED, hw_instr_fd, 0);
+    if (addr1 == (void *)(-1)) {
+        err = errno;
+        fprintf(stderr, "Error mmap() syscall returned%llx\n", (unsigned long long)addr1);
+        exit(EXIT_FAILURE);
+    }
+
+    /* second counter */
+    memset(&pe2, 0, sizeof(struct perf_event_attr));
+    pe2.size = sizeof(struct perf_event_attr);
+    pe2.type = PERF_TYPE_HARDWARE;
+    pe2.config = PERF_COUNT_HW_CPU_CYCLES;
+    pe2.exclude_kernel = 1;
+
+    cpu_cyc_fd = perf_event_open(&pe2, 0, -1, -1, 0);
+    if (cpu_cyc_fd < 0) {
+        err = errno;
+        fprintf(stderr, "Error cpu_cyc_fd == %d; perf_event_open %llx returned error %d:%s\n", cpu_cyc_fd, pe2.config,
+            err, strerror(err));
+        exit(EXIT_FAILURE);
+    }
+
+    /* mmap the second file descriptor */
+    addr2 = mmap(NULL, 4096, PROT_READ, MAP_SHARED, cpu_cyc_fd, 0);
+    if (addr2 == (void *)(-1)) {
+        err = errno;
+        fprintf(stderr, "Error mmap() syscall returned%llx\n", (unsigned long long)addr2);
+        exit(EXIT_FAILURE);
+    }
+
+    struct perf_event_mmap_page * buf1 = (struct perf_event_mmap_page *) addr1;
+    struct perf_event_mmap_page * buf2 = (struct perf_event_mmap_page *) addr2;
+
+    index1 = buf1->index;
+    if (index1 == 0) {
+        printf("addr1  buffer index was 0\n");
+        exit(EXIT_FAILURE);
+    }
+    offset1 = buf1->offset;
+
+    index2 = buf2->index;
+    if (index2 == 0) {
+        printf("addr2  buffer index was 0\n");
+        exit(EXIT_FAILURE);
+    }
+    offset2 = buf2->offset;
+
+    hw_instr_counter = index1 + offset1;
+    cpu_cyc_counter = index2 + offset2;
+}
+
 bool zhpe_stats_init(const char *stats_dir, const char *stats_unique)
 {
     bool                ret = false;
@@ -652,6 +774,7 @@ bool zhpe_stats_init(const char *stats_dir, const char *stats_unique)
             zhpe_stats_ops->setvals = stats_cpu_setvals;
             zhpe_stats_ops->nextslot = stats_flushing_nextslot;
             zhpe_stats_ops->saveme = stats_vmemcpy_saveme;
+            init_cpu_profile();
         }
 
         if (!strcmp("cache",tmp)) {
