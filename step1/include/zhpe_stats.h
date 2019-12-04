@@ -55,9 +55,9 @@ static inline void zhpe_stats_finalize(void)
     zhpe_stats_ops->finalize();
 }
 
-static inline void zhpe_stats_open(uint16_t uid)
+static inline struct zhpe_stats *zhpe_stats_open(uint16_t uid)
 {
-    zhpe_stats_ops->open(uid);
+    return zhpe_stats_ops->open(uid);
 }
 
 static inline void zhpe_stats_close(void)

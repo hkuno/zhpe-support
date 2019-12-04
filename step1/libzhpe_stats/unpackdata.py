@@ -6,24 +6,30 @@ import sys
 from ctypes import *
 import statistics
 
+class Metadata(Structure):
+    _fields_ = [('profileid', c_uint32)]
+
 class Record(Structure):
-    _fields_ = [('profileid', c_size_t),
-                ('subid', c_uint32),
+    _fields_ = [
                 ('opflag', c_uint32),
-                ('val1', c_uint64),
-                ('val2', c_uint64),
-                ('val3', c_uint64),
-                ('val4', c_uint64),
-                ('val5', c_uint64)]
+                ('subid',  c_uint32),
+                ('val1',   c_uint64),
+                ('val2',   c_uint64),
+                ('val3',   c_uint64),
+                ('val4',   c_uint64),
+                ('val5',   c_uint64),
+                ('pad1',   c_uint64),
+                ('pad2',   c_uint64),
+             ]
 
 def printRecordHeader():
-    print('profileid,subid,opflag,val1,val2,val3,val4,val5')
+    print('opflag,subid,val1,val2,val3,val4,val5')
 
 def prettyPrintRecord(aRecord):
-    print('profileid:{}, subid:{}, opflag:{},  val1:{},  val2:{}, val3:{}, val4:{}, val5:{}'.format(aRecord.profileid,aRecord.subid,aRecord.opflag,aRecord.val1,aRecord.val2,aRecord.val3,aRecord.val4,aRecord.val5))
+    print('opflag:{}, subid:{}, val1:{},  val2:{}, val3:{}, val4:{}, val5:{}'.format(aRecord.opflag,aRecord.subid,aRecord.val1,aRecord.val2,aRecord.val3,aRecord.val4,aRecord.val5))
 
 def printRecord(aRecord):
-    print('{},{},{},{},{},{},{},{}'.format(aRecord.profileid,aRecord.subid,aRecord.opflag,aRecord.val1,aRecord.val2,aRecord.val3,aRecord.val4,aRecord.val5))
+    print('{},{},{},{},{},{},{}'.format(aRecord.opflag,aRecord.subid,aRecord.val1,aRecord.val2,aRecord.val3,aRecord.val4,aRecord.val5))
 
 def printStatsForArray(aName, anArray):
     idx=0
@@ -58,6 +64,8 @@ def unpackfile(afilename):
         cpl3_array=[]
         printRecordHeader()
         x = Record()
+        m = Metadata()
+        file.readinto(m)
         while file.readinto(x):
             val1_array.append(x.val1)
             val2_array.append(x.val2)

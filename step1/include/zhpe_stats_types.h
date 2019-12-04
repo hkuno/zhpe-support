@@ -44,58 +44,66 @@
 
 _EXTERN_C_BEG
 
+struct zhpe_stats_metadata {
+    uint32_t    profileid;
+};
+
+struct zhpe_stats_record {
+    uint32_t    op_flag;
+    uint32_t    subid;
+    uint64_t    val1;
+    uint64_t    val2;
+    uint64_t    val3;
+    uint64_t    val4;
+    uint64_t    val5;
+} CACHE_ALIGNED;
+
 struct zhpe_stats_ops {
-    void                (*open)(uint16_t uid);
-    void                (*close)(void);
-    void                (*enable)(void);
-    void                (*disable)(void);
-    struct zhpe_stats   *(*stop_counters)(void);
-    void                (*stop_all)(struct zhpe_stats *stats);
-    void                (*pause_all)(struct zhpe_stats *stats);
-    void                (*restart_all)(void);
-    void                (*start)(struct zhpe_stats *stats, uint32_t subid);
-    void                (*stop)(struct zhpe_stats *stats, uint32_t subid);
-    void                (*pause)(struct zhpe_stats * stats, uint32_t subid);
-    void                (*finalize)(void);
-    void                (*key_destructor)(void *vstats);
-    void                (*stamp)(struct zhpe_stats *stats, uint32_t subid,
-                                 uint32_t items, uint64_t *data);
+    struct zhpe_stats           *(*open)(uint16_t uid);
+    void                        (*close)(void);
+    void                        (*enable)(void);
+    void                        (*disable)(void);
+    struct zhpe_stats           *(*stop_counters)(void);
+    void                        (*stop_all)(struct zhpe_stats *stats);
+    void                        (*pause_all)(struct zhpe_stats *stats);
+    void                        (*restart_all)(void);
+    void                        (*start)(struct zhpe_stats *stats, uint32_t subid);
+    void                        (*stop)(struct zhpe_stats *stats, uint32_t subid);
+    void                        (*pause)(struct zhpe_stats * stats, uint32_t subid);
+    void                        (*finalize)(void);
+    void                        (*key_destructor)(void *vstats);
+    void                        (*stamp)(struct zhpe_stats *stats, uint32_t subid,
+                                         uint32_t items, uint64_t *data);
+    void                        (*setvals)(struct zhpe_stats_record *rec);
+    struct zhpe_stats_record    *(*nextslot)(struct zhpe_stats *stats);
+    void                        (*saveme)(char *dest, char *src);
 };
 
 enum {
-    ZHPE_STATS_START         = 1,
-    ZHPE_STATS_STOP          = 2,
-    ZHPE_STATS_PAUSE         = 3,
-    ZHPE_STATS_RESUME        = 4,
-    ZHPE_STATS_ENABLE        = 5,
-    ZHPE_STATS_DISABLE       = 6,
-    ZHPE_STATS_RESTART       = 7,
-    ZHPE_STATS_STAMP         = 8,
-    ZHPE_STATS_OPEN          = 9,
-    ZHPE_STATS_CLOSE         = 10,
-    ZHPE_STATS_FLUSH         = 11,
-    ZHPE_STATS_STOP_COUNTERS = 12,
+    ZHPE_STATS_SUBID_ZHPQ        = 40,
 };
 
 enum {
-    ZHPE_STATS_SUBID_ALL   = 0,
-    ZHPE_STATS_SUBID_SEND  = 10,
-    ZHPE_STATS_SUBID_RECV  = 20,
-    ZHPE_STATS_SUBID_RMA   = 30,
-    ZHPE_STATS_SUBID_READ  = 40,
-    ZHPE_STATS_SUBID_WRITE = 50,
-    ZHPE_STATS_SUBID_ZHPQ  = 2000,
-    ZHPE_STATS_SUBID_MPI   = 3000,
-    ZHPE_STATS_SUBID_0NOP  = 8000,
-    ZHPE_STATS_SUBID_1NOP  = 8001,
-    ZHPE_STATS_SUBID_2NOP  = 8002,
-    ZHPE_STATS_SUBID_FLUSH = 9000,
-    ZHPE_STATS_SUBID_STAMP = 10000,
+    ZHPE_STATS_START             = 1,
+    ZHPE_STATS_STOP              = 2,
+    ZHPE_STATS_PAUSE             = 3,
+    ZHPE_STATS_RESUME            = 4,
+    ZHPE_STATS_ENABLE            = 5,
+    ZHPE_STATS_DISABLE           = 6,
+    ZHPE_STATS_RESTART           = 7,
+    ZHPE_STATS_STAMP             = 8,
+    ZHPE_STATS_OPEN              = 9,
+    ZHPE_STATS_CLOSE             = 10,
+    ZHPE_STATS_FLUSH_START       = 11,
+    ZHPE_STATS_FLUSH_STOP        = 12,
+    ZHPE_STATS_STOP_COUNTERS     = 13,
 };
 
 enum {
-    ZHPE_STATS_RDTSCP = 10,
-    ZHPE_STATS_CARBON = 20
+    ZHPE_STATS_CARBON       = 0,
+    ZHPE_STATS_RDTSCP       = 1000,
+    ZHPE_STATS_CPU          = 2000,
+    ZHPE_STATS_CACHE        = 3000,
 };
 
 _EXTERN_C_END
