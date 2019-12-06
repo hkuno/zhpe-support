@@ -79,8 +79,12 @@ struct zhpe_stats_ops {
     void                        (*saveme)(char *dest, char *src);
 };
 
+/* Ultimately these should be moved to other repos. */
 enum {
-    ZHPE_STATS_SUBID_ZHPQ        = 40,
+    ZHPE_STATS_SUBID_RECV        = 20,
+    ZHPE_STATS_SUBID_RMA         = 30,
+    ZHPE_STATS_SUBID_SEND        = 40,
+    ZHPE_STATS_SUBID_ZHPQ        = 50,
 };
 
 enum {
