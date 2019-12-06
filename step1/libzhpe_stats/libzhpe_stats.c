@@ -43,6 +43,7 @@
 #include <asm/bitsperlong.h>
 
 #include <linux/perf_event.h>
+#include <sys/prctl.h>
 
 static_assert(sizeof(struct zhpe_stats_record)%64 == 0, "foo");
 
@@ -476,6 +477,7 @@ void zhpe_stats_flush(struct zhpe_stats *stats)
 
     struct zhpe_stats_record tmp;
 
+    zhpe_stats_ops->setvals(&tmp);
     tmp.subid = 0;
     tmp.op_flag = ZHPE_STATS_FLUSH_START;
 
@@ -491,6 +493,7 @@ void zhpe_stats_flush(struct zhpe_stats *stats)
 
     stats->head = 0;
 
+    zhpe_stats_ops->setvals(&tmp);
     tmp.op_flag = ZHPE_STATS_FLUSH_STOP;
     dest = &(stats->buffer[stats->head]);
     zhpe_stats_ops->saveme((char *)dest,(char *)&tmp);
@@ -552,7 +555,6 @@ static void stats_start(struct zhpe_stats *stats, uint32_t subid)
     if (stats == NULL)
         zhpe_stats_open(0);
     stats->state = ZHPE_STATS_RUNNING;
-
     stats_recordme(stats, subid, ZHPE_STATS_START);
 }
 
@@ -574,7 +576,7 @@ static struct zhpe_stats *stats_stop_counters(void)
     if (!stats->enabled)
         return NULL;
 
-    stats_recordme(stats, 0, ZHPE_STATS_STOP_COUNTERS);
+    // stats_recordme(stats, 0, ZHPE_STATS_STOP_COUNTERS);
 
     return stats;
 }
@@ -612,7 +614,8 @@ static void stats_enable()
         return;
 
     stats->enabled = true;
-
+    do_rdtscp();
+    prctl(PR_TASK_PERF_EVENTS_ENABLE);
     stats_recordme(stats, 0, ZHPE_STATS_ENABLE);
 }
 
@@ -623,9 +626,10 @@ static void stats_disable()
     if (!stats)
         return;
 
+    do_rdtscp();
     stats->enabled = false;
-
     stats_recordme(stats, 0, ZHPE_STATS_DISABLE);
+    prctl(PR_TASK_PERF_EVENTS_DISABLE);
 }
 
 static void stats_stamp()
@@ -735,6 +739,7 @@ static void init_cpu_profile()
 
     hw_instr_counter = index1 + offset1;
     cpu_cyc_counter = index2 + offset2;
+    prctl(PR_TASK_PERF_EVENTS_ENABLE);
 }
 
 bool zhpe_stats_init(const char *stats_dir, const char *stats_unique)
