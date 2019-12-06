@@ -69,7 +69,7 @@ static inline void zhpe_stats_stop_all(void)
 {
     struct zhpe_stats   *stats;
 
-    if ((stats = zhpe_stats_ops->stop_counters()))
+    if ((stats = zhpe_stats_ops->get_zhpe_stats()))
         zhpe_stats_ops->stop_all(stats);
 }
 
@@ -77,7 +77,7 @@ static inline void zhpe_stats_pause_all(void)
 {
     struct zhpe_stats   *stats;
 
-    if ((stats = zhpe_stats_ops->stop_counters()))
+    if ((stats = zhpe_stats_ops->get_zhpe_stats()))
         zhpe_stats_ops->pause_all(stats);
 }
 
@@ -90,7 +90,7 @@ static inline void zhpe_stats_start(uint32_t subid)
 {
     struct zhpe_stats   *stats;
 
-    if ((stats = zhpe_stats_ops->stop_counters()))
+    if ((stats = zhpe_stats_ops->get_zhpe_stats()))
         zhpe_stats_ops->start(stats, subid);
 }
 
@@ -98,7 +98,7 @@ static inline void zhpe_stats_stop(uint32_t subid)
 {
     struct zhpe_stats   *stats;
 
-    if ((stats = zhpe_stats_ops->stop_counters()))
+    if ((stats = zhpe_stats_ops->get_zhpe_stats()))
         zhpe_stats_ops->stop(stats, subid);
 }
 
@@ -106,7 +106,7 @@ static inline void zhpe_stats_pause(uint32_t subid)
 {
     struct zhpe_stats   *stats;
 
-    if ((stats = zhpe_stats_ops->stop_counters()))
+    if ((stats = zhpe_stats_ops->get_zhpe_stats()))
         zhpe_stats_ops->pause(stats, subid);
 }
 
@@ -124,13 +124,15 @@ static inline void zhpe_stats_disable(void)
 do {                                                                    \
     struct zhpe_stats   *stats;                                         \
                                                                         \
-    if ((stats = zhpe_stats_ops->stop_counters())) {                    \
+    if ((stats = zhpe_stats_ops->get_zhpe_stats())) {                    \
         uint64_t        data[] = { __VA_ARGS__ };                       \
                                                                         \
+        assert(sizeof(data)/sizeof(uint64_t) <= 4);                     \
         zhpe_stats_ops->stamp(stats, _subid,                            \
                              sizeof(data) / sizeof(uint64_t), data);    \
     }                                                                   \
 } while(0)
+
 
 #define zhpe_stats_subid(_name, _id)            \
     ((ZHPE_STATS_SUBID_##_name * 1000) + _id)

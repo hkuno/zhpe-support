@@ -180,7 +180,7 @@ static struct zhpe_stats_ops zhpe_stats_nops = {
     .close              = stats_nop_void,
     .enable             = stats_nop_void,
     .disable            = stats_nop_void,
-    .stop_counters      = stats_nop_null,
+    .get_zhpe_stats     = stats_nop_null,
     .stop_all           = stats_nop_stats,
     .pause_all          = stats_nop_stats,
     .restart_all        = stats_nop_void,
@@ -566,7 +566,7 @@ static void stats_stop(struct zhpe_stats *stats, uint32_t subid)
     stats_recordme(stats, subid, ZHPE_STATS_STOP);
 }
 
-static struct zhpe_stats *stats_stop_counters(void)
+static inline struct zhpe_stats *get_zhpe_stats(void)
 {
     struct zhpe_stats   *stats;
     stats = pthread_getspecific(zhpe_stats_key);
@@ -575,8 +575,6 @@ static struct zhpe_stats *stats_stop_counters(void)
 
     if (!stats->enabled)
         return NULL;
-
-    // stats_recordme(stats, 0, ZHPE_STATS_STOP_COUNTERS);
 
     return stats;
 }
@@ -632,14 +630,23 @@ static void stats_disable()
     prctl(PR_TASK_PERF_EVENTS_DISABLE);
 }
 
-static void stats_stamp()
+static void stats_stamp(struct zhpe_stats *stats, uint32_t subid, uint32_t items, uint64_t *data)
 {
-    struct zhpe_stats   *stats;
-    stats = pthread_getspecific(zhpe_stats_key);
-    if (!stats)
-        return;
+    struct zhpe_stats_record    *dest;
+    struct zhpe_stats_record    tmp;
 
-    stats_recordme(stats, 0, ZHPE_STATS_DISABLE);
+    tmp.subid = subid;
+
+    zhpe_stats_ops->setvals(&tmp);
+    tmp.op_flag = ZHPE_STATS_STAMP;
+
+    tmp.val2 = items > 0 ? ((uint64_t *)data)[0] : 0;
+    tmp.val3 = items > 1 ? ((uint64_t *)data)[1] : 0;
+    tmp.val4 = items > 2 ? ((uint64_t *)data)[2] : 0;
+    tmp.val5 = items > 3 ? ((uint64_t *)data)[3] : 0;
+
+    dest = zhpe_stats_ops->nextslot(stats);
+    zhpe_stats_ops->saveme((char *)dest, (char *)&tmp);
 }
 
 static struct zhpe_stats_ops stats_ops_perf_event = {
@@ -647,7 +654,7 @@ static struct zhpe_stats_ops stats_ops_perf_event = {
     .close              = stats_close,
     .enable             = stats_enable,
     .disable            = stats_disable,
-    .stop_counters      = stats_stop_counters,
+    .get_zhpe_stats      = get_zhpe_stats,
     .stop_all           = stats_stop_all,
     .pause_all          = stats_pause_all,
     .restart_all        = stats_restart_all,
