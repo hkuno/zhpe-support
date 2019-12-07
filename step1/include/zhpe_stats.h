@@ -37,9 +37,7 @@
 #ifndef _ZHPE_STATS_H_
 #define _ZHPE_STATS_H_
 
-#include <stdbool.h>
-#include <stdint.h>
-
+#include <zhpeq_util.h>
 #include <zhpe_stats_types.h>
 
 _EXTERN_C_BEG
@@ -48,7 +46,8 @@ _EXTERN_C_BEG
 
 extern struct zhpe_stats_ops *zhpe_stats_ops;
 bool zhpe_stats_init(const char *stats_dir, const char *stats_unique);
-void zhpe_stats_test(uint16_t uid);
+void zhpe_stats_calibrate(uint16_t uid);
+void zhpe_rdtscp_calibrate();
 
 static inline void zhpe_stats_finalize(void)
 {
@@ -69,7 +68,7 @@ static inline void zhpe_stats_stop_all(void)
 {
     struct zhpe_stats   *stats;
 
-    if ((stats = zhpe_stats_ops->get_zhpe_stats()))
+    if (likely(stats = zhpe_stats_ops->get_zhpe_stats()))
         zhpe_stats_ops->stop_all(stats);
 }
 
@@ -77,7 +76,7 @@ static inline void zhpe_stats_pause_all(void)
 {
     struct zhpe_stats   *stats;
 
-    if ((stats = zhpe_stats_ops->get_zhpe_stats()))
+    if (likely(stats = zhpe_stats_ops->get_zhpe_stats()))
         zhpe_stats_ops->pause_all(stats);
 }
 
@@ -90,7 +89,7 @@ static inline void zhpe_stats_start(uint32_t subid)
 {
     struct zhpe_stats   *stats;
 
-    if ((stats = zhpe_stats_ops->get_zhpe_stats()))
+    if (likely(stats = zhpe_stats_ops->get_zhpe_stats()))
         zhpe_stats_ops->start(stats, subid);
 }
 
@@ -98,7 +97,7 @@ static inline void zhpe_stats_stop(uint32_t subid)
 {
     struct zhpe_stats   *stats;
 
-    if ((stats = zhpe_stats_ops->get_zhpe_stats()))
+    if (likely(stats = zhpe_stats_ops->get_zhpe_stats()))
         zhpe_stats_ops->stop(stats, subid);
 }
 
@@ -106,7 +105,7 @@ static inline void zhpe_stats_pause(uint32_t subid)
 {
     struct zhpe_stats   *stats;
 
-    if ((stats = zhpe_stats_ops->get_zhpe_stats()))
+    if (likely(stats = zhpe_stats_ops->get_zhpe_stats()))
         zhpe_stats_ops->pause(stats, subid);
 }
 
@@ -124,7 +123,7 @@ static inline void zhpe_stats_disable(void)
 do {                                                                    \
     struct zhpe_stats   *stats;                                         \
                                                                         \
-    if ((stats = zhpe_stats_ops->get_zhpe_stats())) {                    \
+    if (likely(stats = zhpe_stats_ops->get_zhpe_stats())) {                    \
         uint64_t        data[] = { __VA_ARGS__ };                       \
                                                                         \
         assert(sizeof(data)/sizeof(uint64_t) <= 4);                     \
@@ -145,7 +144,7 @@ static inline bool zhpe_stats_init(const char *stats_dir,
     return false;
 }
 
-#define zhpe_stats_test(uid)            do {} while (0)
+#define zhpe_stats_calibrate(uid)            do {} while (0)
 #define zhpe_stats_finalize()           do {} while (0)
 #define zhpe_stats_open(uid)            do {} while (0)
 #define zhpe_stats_close()              do {} while (0)

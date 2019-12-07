@@ -34,6 +34,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+
 #include <pthread.h>
 
 #include <zhpeq_util.h>
@@ -106,12 +107,20 @@ int main(int argc, char **argv)
     zhpe_stats_init(argv[1], argv[2]);
     zhpe_stats_open(1);
     zhpe_stats_enable();
+    zhpe_rdtscp_calibrate();
 
     /* 0 nops */
-    for (i=0;i<10;i++) {
-        zhpe_stats_start(0);
-        zhpe_stats_stop(0);
+    int b=1;
+    for (i=0;i<1000;i++) {
+        zhpe_stats_start(8);
+        atm_inc(&b);
+        zhpe_stats_stop(8);
     }
+
+    zhpe_stats_start(1);
+    NOP1;
+    zhpe_stats_stop(1);
+#if 1
 
     /* 1 nop */
     for (i=0;i<10;i++) {
@@ -172,53 +181,62 @@ int main(int argc, char **argv)
 
     /* pthread */
     pthread_spinlock_t lock;
-    int pshared;
-    int ret;
+    int pshared = PTHREAD_PROCESS_PRIVATE;
 
-    ret = pthread_spin_init(&lock, pshared)
+    ret = pthread_spin_init(&lock, pshared);
 
     /* warmup */
     for (i=0;i<10;i++) {
         zhpe_stats_start(300);
-        ret = pthread_ spin_lock(&lock);
-        ret = pthread_ spin_unlock(&lock);
+        ret = pthread_spin_lock(&lock);
+        ret = pthread_spin_unlock(&lock);
 
         ret = -1;
         while (ret != 0) {
             ret = pthread_spin_trylock(&lock);
         }
-        ret = pthread_ spin_unlock(&lock);
+        ret = pthread_spin_unlock(&lock);
         zhpe_stats_stop(300);
     }
 
     /* test */
     for (i=0;i<1000;i++) {
         zhpe_stats_start(500);
-        ret = pthread_ spin_lock(&lock);
+        ret = pthread_spin_lock(&lock);
         zhpe_stats_stop(500);
 
         zhpe_stats_start(600);
-        ret = pthread_ spin_unlock(&lock);
+        ret = pthread_spin_unlock(&lock);
         zhpe_stats_stop(600);
     }
 
     for (i=0;i<1000;i++) {
         ret = -1;
         zhpe_stats_start(700);
-        while (ret != 0) {
-            ret = pthread_spin_trylock(&lock);
-        }
+        ret = pthread_spin_trylock(&lock);
         zhpe_stats_stop(700);
-
+        if (ret != 0)
+          exit(-1);
         zhpe_stats_start(600);
-        ret = pthread_ spin_unlock(&lock);
+        ret = pthread_spin_unlock(&lock);
         zhpe_stats_stop(600);
     }
 
+    int foo=1;
+    for (i=0;i<1000;i++) {
+        zhpe_stats_start(800);
+        atm_inc(&foo);
+        zhpe_stats_stop(800);
+        zhpe_stats_start(900);
+        atm_dec(&foo);
+        zhpe_stats_stop(900);
+    }
+
+
 
     /* cleanup */
-    ret = pthread_destroy(&lock)
-
+    pthread_spin_destroy(&lock);
+#endif
 
     /* sanity check stamp */
     zhpe_stats_stamp(1, 1);
