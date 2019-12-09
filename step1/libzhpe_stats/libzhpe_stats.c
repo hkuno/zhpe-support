@@ -45,6 +45,8 @@
 #include <linux/perf_event.h>
 #include <sys/prctl.h>
 
+#include <math.h>
+
 #define WHERETIMEGO 0
 
 static_assert(sizeof(struct zhpe_stats_record)%64 == 0, "foo");
@@ -160,11 +162,6 @@ static void stats_nop_saveme(char *dest, char *src)
 {
 }
 
-static struct zhpe_stats_record *stats_nop_nextslot(struct zhpe_stats *stats)
-{
-  return NULL;
-}
-
 static void stats_nop_stats_uint32(struct zhpe_stats *stats, uint32_t dum)
 {
 }
@@ -193,7 +190,6 @@ static struct zhpe_stats_ops zhpe_stats_nops = {
     .key_destructor     = stats_nop_voidp,
     .stamp              = stats_nop_stamp,
     .setvals            = stats_nop_setvals,
-    .nextslot           = stats_nop_nextslot,
     .saveme             = stats_nop_saveme,
 };
 
@@ -202,7 +198,9 @@ struct zhpe_stats_ops *zhpe_stats_ops = &zhpe_stats_nops;
 #ifdef HAVE_ZHPE_STATS
 
 #include <zhpe_stats.h>
-#define ZHPE_STATS_BUF_COUNT_MAX 10000
+#define ZHPE_STATS_BUF_COUNT_MAX 1048576
+
+#define CALIBRATE_ITERATIONS 1000
 
 /* Common definitions/code */
 
@@ -212,6 +210,7 @@ static pthread_key_t    zhpe_stats_key;
 static pthread_mutex_t  zhpe_stats_mutex = PTHREAD_MUTEX_INITIALIZER;
 static bool             zhpe_stats_init_once;
 static uint64_t         zhpe_stats_buf_count;
+static uint64_t         zhpe_stats_buf_mask;
 static size_t           zhpe_stats_profile;
 
 int hw_instr_fd;
@@ -279,6 +278,7 @@ static struct zhpe_stats *stats_open(uint16_t uid)
     return stats;
 }
 
+/* overwrite when full */
 static struct zhpe_stats_record *stats_simple_nextslot(struct zhpe_stats *stats)
 {
     assert(stats);
@@ -287,13 +287,12 @@ static struct zhpe_stats_record *stats_simple_nextslot(struct zhpe_stats *stats)
 
     assert(stats->head < stats->num_slots - 1);
 
-    rec = &(stats->buffer[stats->head]);
-
-    stats->head++;
+    rec = &(stats->buffer[(zhpe_stats_buf_mask & stats->head++)]);
 
     return rec;
 }
 
+/*
 static struct zhpe_stats_record *stats_flushing_nextslot(struct zhpe_stats *stats)
 {
     assert(stats);
@@ -308,6 +307,7 @@ static struct zhpe_stats_record *stats_flushing_nextslot(struct zhpe_stats *stat
 
     return dest;
 }
+*/
 
 static uint64_t do_rdtscp()
 {
@@ -322,20 +322,13 @@ static uint64_t do_rdtscp()
 
 static void stats_rdtscp_setvals(struct zhpe_stats_record *rec)
 {
-#if WHERETIMEGO
-    uint64_t v1, v2;
-    v1 = do_rdtscp();
-#endif
-//    rec->val1 = do_rdtscp();
+    rec->val1 = do_rdtscp();
     rec->val2 = 0;
     rec->val3 = 0;
     rec->val4 = 0;
     rec->val5 = 0;
-
-#if WHERETIMEGO
-    v2 = do_rdtscp();
-    print_err("[stats_rdtscp_setvals: %lu] %s,%u\n", v2-v1, __func__, __LINE__);
-#endif
+    rec->val6 = 0;
+    rec->pad = 0;
 }
 
 static void stats_cpu_setvals(struct zhpe_stats_record *rec)
@@ -349,30 +342,8 @@ static void stats_cpu_setvals(struct zhpe_stats_record *rec)
     rec->val2 = ((long long)cnt2low) | ((long long)cnt2high ) << 32;
     rec->val3 = ((long long)cnt3low) | ((long long)cnt3high ) << 32;
     rec->val5 = 0;
-}
-
-static void stats_cache_setvals(struct zhpe_stats_record *rec)
-{
-    rec->val1 = do_rdtscp();
-    rec->val2 = 0;
-    rec->val3 = 0;
-    rec->val4 = 0;
-    rec->val5 = 0;
-}
-
-static void stats_recordme(struct zhpe_stats *stats, uint32_t subid, uint32_t opflag)
-{
-    struct zhpe_stats_record *dest;
-    struct zhpe_stats_record tmp;
-
-    tmp.val1 = do_rdtscp();
-
-    tmp.subid = subid;
-    tmp.op_flag = opflag;
-
-    zhpe_stats_ops->setvals(&tmp);
-    dest = zhpe_stats_ops->nextslot(stats);
-    zhpe_stats_ops->saveme((char *)dest, (char *)&tmp);
+    rec->val6 = 0;
+    rec->pad = 0;
 }
 
 static inline void stats_vmemcpy_saveme(char * dest, char * src)
@@ -387,121 +358,205 @@ static inline void stats_memcpy_saveme(char * dest, char * src)
     memcpy(dest, src, len);
 }
 
-static void zhpe_cpu_calibrate_atm_inc(uint32_t opflag)
+static void rdtscp_stats_recordme(struct zhpe_stats *stats, uint32_t subid, uint32_t opflag)
+{
+    struct zhpe_stats_record *dest;
+    struct zhpe_stats_record tmp;
+
+    tmp.subid = subid;
+    tmp.op_flag = opflag;
+
+    stats_rdtscp_setvals(&tmp);
+    dest = stats_simple_nextslot(stats);
+    stats_memcpy_saveme((char *)dest, (char *)&tmp);
+}
+
+static void cpu_stats_recordme(struct zhpe_stats *stats, uint32_t subid, uint32_t opflag)
+{
+    struct zhpe_stats_record *dest;
+    struct zhpe_stats_record tmp;
+
+    tmp.subid = subid;
+    tmp.op_flag = opflag;
+
+    stats_cpu_setvals(&tmp);
+    dest = stats_simple_nextslot(stats);
+    stats_memcpy_saveme((char *)dest, (char *)&tmp);
+}
+
+void zhpe_stats_calibrate_cpu_atm_inc(uint32_t opflag, uint32_t subid)
 {
     uint64_t v1, v2;
     struct zhpe_stats_record *dest;
     struct zhpe_stats *stats;
     stats = pthread_getspecific(zhpe_stats_key);
     int i;
-    unsigned int cyccntlow_v1, cyccnthigh_v1;
-    unsigned int cyccntlow_v2, cyccnthigh_v2;
-    unsigned int instcntlow_v1, instcnthigh_v1;
-    unsigned int instcntlow_v2, instcnthigh_v2;
+    unsigned int cntlow_v1, cnthigh_v1;
+    unsigned int cntlow_v2, cnthigh_v2;
 
-    rdpmc(cpu_cyc_counter, cyccntlow_v1, cyccnthigh_v1);
-    rdpmc(hw_instr_counter, instcntlow_v1, instcnthigh_v1);
+    uint64_t avg_rdtscp;
+    uint64_t avg_cpu_cyc;
+    uint64_t avg_hw_instr;
+
+    uint64_t avg_b2b_rdtscp;
+    uint64_t avg_b2b_cpu_cyc;
+    uint64_t avg_b2b_hw_instr;
+
     uint64_t rdtscp_total=0;
-    uint64_t rdtscp_count=1;
     uint64_t cyc_total=0;
-    uint64_t cyc_count=0;
     uint64_t inst_total=0;
-    uint64_t inst_count=0;
+
+    uint64_t b2b_rdtscp_total=0;
+    uint64_t b2b_rdpmc_c_total=0;
+    uint64_t b2b_rdpmc_i_total=0;
+
     int b=0;
 
-    for (i=0;i<10;i++, rdtscp_count++)
+    /* rdtscp */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
     {
         atm_inc(&b);
-        do_rdtscp(&b);
+        do_rdtscp();
         atm_inc(&b);
         atm_inc(&b);
         v1 = do_rdtscp();
         atm_inc(&b);
         v2 = do_rdtscp();
         rdtscp_total += v2 - v1;
-        printf("[atm_inc rdtscp: v2-v1 is %lu]\n",v2-v1);
+        do_rdtscp();
+        do_rdtscp();
+        v1 = do_rdtscp();
+        v2 = do_rdtscp();
+        b2b_rdtscp_total += v2 - v1;
     }
-    printf("[atm_inc rdtscp average: %lu]\n",rdtscp_total/rdtscp_count);
+    avg_b2b_rdtscp = b2b_rdtscp_total/i;
+    avg_rdtscp = rdtscp_total/i;
 
-    for (i=0;i<10;i++, cyc_count++)
+    /* cpu_cyc_counter */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
     {
         atm_inc(&b);
         atm_inc(&b);
-        rdpmc(cpu_cyc_counter, cyccntlow_v1, cyccnthigh_v1);
+        rdpmc(cpu_cyc_counter, cntlow_v1, cnthigh_v1);
         atm_inc(&b);
-        atm_inc(&b);
-        rdpmc(cpu_cyc_counter, cyccntlow_v1, cyccnthigh_v1);
-        atm_inc(&b);
-        rdpmc(cpu_cyc_counter, cyccntlow_v2, cyccnthigh_v2);
-        v1 = ((long long)cyccntlow_v1) | ((long long)cyccnthigh_v1 ) << 32;
-        v2 = ((long long)cyccntlow_v2) | ((long long)cyccnthigh_v2 ) << 32;
+        rdpmc(cpu_cyc_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
         cyc_total += v2 - v1;
-        printf("[atm_inc cyc_counter: v2-v1 is %lu]\n",v2-v1);
+        atm_inc(&b);
+        atm_inc(&b);
+        rdpmc(cpu_cyc_counter, cntlow_v1, cnthigh_v1);
+        rdpmc(cpu_cyc_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        b2b_rdpmc_c_total += v2 - v1;
     }
-    printf("[atm_inc cyc counter average: %lu]\n",cyc_total/cyc_count);
+    avg_b2b_cpu_cyc = b2b_rdpmc_c_total/i;
+    avg_cpu_cyc = cyc_total/i;
 
-    for (i=0;i<10;i++, inst_count++)
+    /* hw_instr_counter */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
     {
         atm_inc(&b);
         atm_inc(&b);
-        rdpmc(hw_instr_counter, instcntlow_v1, instcnthigh_v1);
+        rdpmc(hw_instr_counter, cntlow_v1, cnthigh_v1);
         atm_inc(&b);
-        atm_inc(&b);
-        rdpmc(hw_instr_counter, instcntlow_v1, instcnthigh_v1);
-        atm_inc(&b);
-        rdpmc(hw_instr_counter, instcntlow_v2, instcnthigh_v2);
-        v1 = ((long long)instcntlow_v1) | ((long long)instcnthigh_v1 ) << 32;
-        v2 = ((long long)instcntlow_v2) | ((long long)instcnthigh_v2 ) << 32;
+        rdpmc(hw_instr_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
         inst_total += v2 - v1;
-        printf("[atm_inc inst_counter: v2-v1 is %lu]\n",v2-v1);
+        atm_inc(&b);
+        atm_inc(&b);
+        rdpmc(hw_instr_counter, cntlow_v1, cnthigh_v1);
+        rdpmc(hw_instr_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        b2b_rdpmc_i_total += v2 - v1;
     }
-    printf("[atm_inc inst counter average: %lu]\n",inst_total/inst_count);
+    avg_b2b_hw_instr = b2b_rdpmc_i_total/i;
+    avg_hw_instr = inst_total/i;
 
     struct zhpe_stats_record tmp;
-    tmp.subid=1;
+    tmp.subid= subid;
     tmp.op_flag = opflag;
 
-    tmp.val1 = rdtscp_total/rdtscp_count;
-    tmp.val2 = cyc_total/cyc_count;
-    tmp.val3 = inst_total/inst_count;
-    tmp.val4 = 0;
-    tmp.val5 = 0;
-    dest = zhpe_stats_ops->nextslot(stats);
-    zhpe_stats_ops->saveme((char *)dest, (char *)&tmp);
+    avg_b2b_rdtscp = b2b_rdtscp_total/i;
+    avg_rdtscp = rdtscp_total/i;
+    avg_hw_instr = inst_total/i;
+    avg_cpu_cyc = cyc_total/i;
+    tmp.val1 = avg_rdtscp;
+    tmp.val2 = avg_cpu_cyc;
+    tmp.val3 = avg_hw_instr;
+    tmp.val4 = avg_b2b_rdtscp;
+    tmp.val5 =  avg_b2b_cpu_cyc;
+    tmp.val6 = avg_b2b_hw_instr;
 
+    dest = stats_simple_nextslot(stats);
+    stats_memcpy_saveme((char *)dest, (char *)&tmp);
+
+    zhpe_stats_start(subid);
+    zhpe_stats_stop(subid);
+
+    zhpe_stats_start(subid);
     atm_inc(&b);
-    rdpmc(hw_instr_counter, instcntlow_v1, instcnthigh_v1);
-    rdpmc(cpu_cyc_counter, cyccntlow_v1, cyccnthigh_v1);
-    do_rdtscp();
-    zhpe_stats_start(86);
-    zhpe_stats_stop(86);
-    zhpe_stats_start(8);
+    zhpe_stats_stop(subid);
+
+    zhpe_stats_start(subid);
     atm_inc(&b);
-    zhpe_stats_stop(8);
+    atm_inc(&b);
+    zhpe_stats_stop(subid);
+
+    zhpe_stats_start(subid);
+    atm_inc(&b);
+    atm_inc(&b);
+    atm_inc(&b);
+    zhpe_stats_stop(subid);
+
+    zhpe_stats_start(subid);
+    atm_inc(&b);
+    atm_inc(&b);
+    atm_inc(&b);
+    atm_inc(&b);
+    zhpe_stats_stop(subid);
+
+    zhpe_stats_start(subid);
+    atm_inc(&b);
+    atm_inc(&b);
+    atm_inc(&b);
+    atm_inc(&b);
+    atm_inc(&b);
+    zhpe_stats_stop(subid);
 }
 
-static void zhpe_cpu_calibrate_nop(uint32_t opflag)
+
+void zhpe_stats_calibrate_cpu_nop(uint32_t opflag, uint32_t subid)
 {
     uint64_t v1, v2;
     struct zhpe_stats_record *dest;
     struct zhpe_stats *stats;
     stats = pthread_getspecific(zhpe_stats_key);
     int i;
-    unsigned int cyccntlow_v1, cyccnthigh_v1;
-    unsigned int cyccntlow_v2, cyccnthigh_v2;
-    unsigned int instcntlow_v1, instcnthigh_v1;
-    unsigned int instcntlow_v2, instcnthigh_v2;
+    unsigned int cntlow_v1, cnthigh_v1;
+    unsigned int cntlow_v2, cnthigh_v2;
 
-    rdpmc(cpu_cyc_counter, cyccntlow_v1, cyccnthigh_v1);
-    rdpmc(hw_instr_counter, instcntlow_v1, instcnthigh_v1);
+    uint64_t avg_rdtscp;
+    uint64_t avg_cpu_cyc;
+    uint64_t avg_hw_instr;
+
+    uint64_t avg_b2b_rdtscp;
+    uint64_t avg_b2b_cpu_cyc;
+    uint64_t avg_b2b_hw_instr;
+
     uint64_t rdtscp_total=0;
-    uint64_t rdtscp_count=0;
     uint64_t cyc_total=0;
-    uint64_t cyc_count=0;
     uint64_t inst_total=0;
-    uint64_t inst_count=0;
 
-    for (i=0;i<10;i++, rdtscp_count++)
+    uint64_t b2b_rdtscp_total=0;
+    uint64_t b2b_rdpmc_c_total=0;
+    uint64_t b2b_rdpmc_i_total=0;
+
+    /* rdtscp */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
     {
         nop();
         do_rdtscp();
@@ -511,136 +566,743 @@ static void zhpe_cpu_calibrate_nop(uint32_t opflag)
         nop();
         v2 = do_rdtscp();
         rdtscp_total += v2 - v1;
-        printf("[nop rdtscp: v2-v1 is %lu]\n",v2-v1);
+        do_rdtscp();
+        do_rdtscp();
+        v1 = do_rdtscp();
+        v2 = do_rdtscp();
+        b2b_rdtscp_total += v2 - v1;
     }
-    printf("[nop rdtscp average: %lu]\n",rdtscp_total/rdtscp_count);
+    avg_b2b_rdtscp = b2b_rdtscp_total/i;
+    avg_rdtscp = rdtscp_total/i;
 
-    for (i=0;i<10;i++, cyc_count++)
+    /* cpu_cyc_counter */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
     {
         nop();
         nop();
-        rdpmc(cpu_cyc_counter, cyccntlow_v1, cyccnthigh_v1);
+        rdpmc(cpu_cyc_counter, cntlow_v1, cnthigh_v1);
         nop();
-        nop();
-        rdpmc(cpu_cyc_counter, cyccntlow_v1, cyccnthigh_v1);
-        nop();
-        rdpmc(cpu_cyc_counter, cyccntlow_v2, cyccnthigh_v2);
-        v1 = ((long long)cyccntlow_v1) | ((long long)cyccnthigh_v1 ) << 32;
-        v2 = ((long long)cyccntlow_v2) | ((long long)cyccnthigh_v2 ) << 32;
+        rdpmc(cpu_cyc_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
         cyc_total += v2 - v1;
-        printf("[nop cyc_counter: v2-v1 is %lu]\n",v2-v1);
+        nop();
+        nop();
+        rdpmc(cpu_cyc_counter, cntlow_v1, cnthigh_v1);
+        rdpmc(cpu_cyc_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        b2b_rdpmc_c_total += v2 - v1;
     }
-    printf("[nop cyc counter average: %lu]\n",cyc_total/cyc_count);
+    avg_b2b_cpu_cyc = b2b_rdpmc_c_total/i;
+    avg_cpu_cyc = cyc_total/i;
 
-    for (i=0;i<10;i++, inst_count++)
+    /* hw_instr_counter */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
     {
         nop();
         nop();
-        rdpmc(hw_instr_counter, instcntlow_v1, instcnthigh_v1);
+        rdpmc(hw_instr_counter, cntlow_v1, cnthigh_v1);
         nop();
-        nop();
-        rdpmc(hw_instr_counter, instcntlow_v1, instcnthigh_v1);
-        nop();
-        rdpmc(hw_instr_counter, instcntlow_v2, instcnthigh_v2);
-        v1 = ((long long)instcntlow_v1) | ((long long)instcnthigh_v1 ) << 32;
-        v2 = ((long long)instcntlow_v2) | ((long long)instcnthigh_v2 ) << 32;
+        rdpmc(hw_instr_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
         inst_total += v2 - v1;
-        printf("[nop inst_counter: v2-v1 is %lu]\n",v2-v1);
+        nop();
+        nop();
+        rdpmc(hw_instr_counter, cntlow_v1, cnthigh_v1);
+        rdpmc(hw_instr_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        b2b_rdpmc_i_total += v2 - v1;
     }
-    printf("[nop inst counter average: %lu]\n",inst_total/inst_count);
+    avg_b2b_hw_instr = b2b_rdpmc_i_total/i;
+    avg_hw_instr = inst_total/i;
 
     struct zhpe_stats_record tmp;
-    tmp.subid=1;
+    tmp.subid=subid;
     tmp.op_flag = opflag;
 
-    tmp.val1 = rdtscp_total/rdtscp_count;
-    tmp.val2 = cyc_total/cyc_count;
-    tmp.val3 = inst_total/inst_count;
+    avg_b2b_rdtscp = b2b_rdtscp_total/i;
+    avg_rdtscp = rdtscp_total/i;
+    avg_hw_instr = inst_total/i;
+    avg_cpu_cyc = cyc_total/i;
+    tmp.val1 = avg_rdtscp;
+    tmp.val2 = avg_cpu_cyc;
+    tmp.val3 = avg_hw_instr;
+    tmp.val4 = avg_b2b_rdtscp;
+    tmp.val5 =  avg_b2b_cpu_cyc;
+    tmp.val6 = avg_b2b_hw_instr;
+
+    dest = stats_simple_nextslot(stats);
+    stats_memcpy_saveme((char *)dest, (char *)&tmp);
+
+    zhpe_stats_start(subid);
+    nop();
+    zhpe_stats_stop(subid);
+}
+
+void zhpe_stats_calibrate_rdtscp (uint32_t opflag, uint32_t subid)
+{
+    uint64_t v1, v2;
+    struct zhpe_stats_record *dest;
+    struct zhpe_stats *stats;
+    stats = pthread_getspecific(zhpe_stats_key);
+    int i;
+    unsigned int cntlow_v1, cnthigh_v1;
+    unsigned int cntlow_v2, cnthigh_v2;
+
+    uint64_t avg_rdtscp;
+    uint64_t avg_cpu_cyc;
+    uint64_t avg_hw_instr;
+
+    uint64_t rdtscp_total=0;
+    uint64_t cyc_total=0;
+    uint64_t inst_total=0;
+
+    /* rdtscp */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
+    {
+        do_rdtscp();
+        v1 = do_rdtscp();
+        do_rdtscp();
+        v2 = do_rdtscp();
+        rdtscp_total += v2 - v1;
+    }
+    avg_rdtscp = rdtscp_total/i;
+
+    /* cpu_cyc_counter */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
+    {
+        do_rdtscp();
+        rdpmc(cpu_cyc_counter, cntlow_v1, cnthigh_v1);
+        do_rdtscp();
+        rdpmc(cpu_cyc_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        cyc_total += v2 - v1;
+    }
+    avg_cpu_cyc = cyc_total/i;
+
+    /* hw_instr_counter */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
+    {
+        do_rdtscp();
+        rdpmc(hw_instr_counter, cntlow_v1, cnthigh_v1);
+        do_rdtscp();
+        rdpmc(hw_instr_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        inst_total += v2 - v1;
+    }
+    avg_hw_instr = inst_total/i;
+
+    struct zhpe_stats_record tmp;
+    tmp.subid= subid;
+    tmp.op_flag = opflag;
+
+    tmp.val1 = avg_rdtscp;
+    tmp.val2 = avg_cpu_cyc;
+    tmp.val3 = avg_hw_instr;
     tmp.val4 = 0;
     tmp.val5 = 0;
-    dest = zhpe_stats_ops->nextslot(stats);
-    zhpe_stats_ops->saveme((char *)dest, (char *)&tmp);
+    tmp.val6 = 0;
 
-    nop();
-    rdpmc(hw_instr_counter, instcntlow_v1, instcnthigh_v1);
-    rdpmc(cpu_cyc_counter, cyccntlow_v1, cyccnthigh_v1);
+    dest = stats_simple_nextslot(stats);
+    stats_memcpy_saveme((char *)dest, (char *)&tmp);
+
+    zhpe_stats_start(subid);
     do_rdtscp();
+    zhpe_stats_stop(subid);
+}
+
+void zhpe_stats_calibrate_rdpmc (uint32_t opflag, uint32_t subid)
+{
+    uint64_t v1, v2;
+    uint64_t v3, v4;
+    struct zhpe_stats_record *dest;
+    struct zhpe_stats *stats;
+    stats = pthread_getspecific(zhpe_stats_key);
+    int i;
+    unsigned int cntlow_v1, cnthigh_v1;
+    unsigned int cntlow_v2, cnthigh_v2;
+    unsigned int cntlow_v3, cnthigh_v3;
+    unsigned int cntlow_v4, cnthigh_v4;
+
+    uint64_t avg_rdtscp;
+    uint64_t avg_cpu_cyc;
+    uint64_t avg_hw_instr;
+
+    uint64_t rdtscp_total=0;
+    uint64_t cyc_total=0;
+    uint64_t inst_total=0;
+
+    /* rdtscp */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
+    {
+        /* warmup */
+        rdpmc(cpu_cyc_counter, cntlow_v3, cnthigh_v1);
+        rdpmc(cpu_cyc_counter, cntlow_v4, cnthigh_v1);
+
+        v1 = do_rdtscp();
+        rdpmc(cpu_cyc_counter, cntlow_v3, cnthigh_v1);
+        rdpmc(cpu_cyc_counter, cntlow_v4, cnthigh_v1);
+        v3 = ((long long)cntlow_v3) | ((long long)cnthigh_v3 ) << 32;
+        v4 = ((long long)cntlow_v4) | ((long long)cnthigh_v4 ) << 32;
+        v2 = do_rdtscp();
+
+        rdtscp_total += v2 - v1;
+    }
+    avg_rdtscp = rdtscp_total/i;
+
+    /* cpu_cyc_counter */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
+    {
+        rdpmc(cpu_cyc_counter, cntlow_v3, cnthigh_v1);
+        rdpmc(cpu_cyc_counter, cntlow_v4, cnthigh_v1);
+
+        rdpmc(cpu_cyc_counter, cntlow_v1, cnthigh_v1);
+        rdpmc(cpu_cyc_counter, cntlow_v3, cnthigh_v1);
+        rdpmc(cpu_cyc_counter, cntlow_v4, cnthigh_v1);
+        v3 = ((long long)cntlow_v3) | ((long long)cnthigh_v3 ) << 32;
+        v4 = ((long long)cntlow_v4) | ((long long)cnthigh_v4 ) << 32;
+        rdpmc(cpu_cyc_counter, cntlow_v2, cnthigh_v2);
+
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        cyc_total += v2 - v1;
+    }
+    avg_cpu_cyc = cyc_total/i;
+
+    /* hw_instr_counter */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
+    {
+        rdpmc(cpu_cyc_counter, cntlow_v3, cnthigh_v1);
+        rdpmc(hw_instr_counter, cntlow_v4, cnthigh_v4);
+
+        rdpmc(cpu_cyc_counter, cntlow_v1, cnthigh_v1);
+        rdpmc(cpu_cyc_counter, cntlow_v3, cnthigh_v3);
+        rdpmc(hw_instr_counter, cntlow_v4, cnthigh_v4);
+        v3 = ((long long)cntlow_v3) | ((long long)cnthigh_v3 ) << 32;
+        v4 = ((long long)cntlow_v4) | ((long long)cnthigh_v4 ) << 32;
+        rdpmc(hw_instr_counter, cntlow_v2, cnthigh_v2);
+
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        inst_total += v2 - v1;
+    }
+    avg_hw_instr = inst_total/i;
+
+    struct zhpe_stats_record tmp;
+    tmp.subid= subid;
+    tmp.op_flag = opflag;
+
+    tmp.val1 = avg_rdtscp;
+    tmp.val2 = avg_cpu_cyc;
+    tmp.val3 = avg_hw_instr;
+    tmp.val4 = v3;
+    tmp.val5 = v4;
+    tmp.val6 = v4-v3;
+
+    dest = stats_simple_nextslot(stats);
+    stats_memcpy_saveme((char *)dest, (char *)&tmp);
+
+    rdpmc(cpu_cyc_counter, cntlow_v3, cnthigh_v3);
+    rdpmc(cpu_cyc_counter, cntlow_v4, cnthigh_v4);
+    zhpe_stats_start(subid);
+    rdpmc(cpu_cyc_counter, cntlow_v3, cnthigh_v3);
+    rdpmc(cpu_cyc_counter, cntlow_v4, cnthigh_v4);
+    v3 = ((long long)cntlow_v3) | ((long long)cnthigh_v3 ) << 32;
+    v4 = ((long long)cntlow_v4) | ((long long)cnthigh_v4 ) << 32;
+    zhpe_stats_stop(subid);
+}
+
+void zhpe_stats_calibrate_cpu_start(uint32_t opflag, uint32_t subid)
+{
+    uint64_t v1, v2;
+    struct zhpe_stats_record *dest;
+    struct zhpe_stats *stats;
+    stats = pthread_getspecific(zhpe_stats_key);
+    int i;
+    unsigned int cntlow_v1, cnthigh_v1;
+    unsigned int cntlow_v2, cnthigh_v2;
+
+    uint64_t avg_rdtscp;
+    uint64_t avg_cpu_cyc;
+    uint64_t avg_hw_instr;
+
+    uint64_t avg_b2b_rdtscp;
+    uint64_t avg_b2b_cpu_cyc;
+    uint64_t avg_b2b_hw_instr;
+
+    uint64_t rdtscp_total=0;
+    uint64_t cyc_total=0;
+    uint64_t inst_total=0;
+
+    uint64_t b2b_rdtscp_total=0;
+    uint64_t b2b_rdpmc_c_total=0;
+    uint64_t b2b_rdpmc_i_total=0;
+
+
+    /* rdtscp */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
+    {
+        zhpe_stats_start(86);
+        zhpe_stats_stop(86);
+        do_rdtscp();
+        zhpe_stats_start(86);
+        zhpe_stats_stop(86);
+        v1 = do_rdtscp();
+        zhpe_stats_start(86);
+        v2 = do_rdtscp();
+        rdtscp_total += v2 - v1;
+        zhpe_stats_stop(86);
+        do_rdtscp();
+        do_rdtscp();
+        v1 = do_rdtscp();
+        v2 = do_rdtscp();
+        b2b_rdtscp_total += v2 - v1;
+    }
+    avg_b2b_rdtscp = b2b_rdtscp_total/i;
+    avg_rdtscp = rdtscp_total/i;
+
+    /* cpu_cyc_counter */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
+    {
+        zhpe_stats_start(86);
+        zhpe_stats_stop(86);
+        rdpmc(cpu_cyc_counter, cntlow_v1, cnthigh_v1);
+        zhpe_stats_start(86);
+        rdpmc(cpu_cyc_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        cyc_total += v2 - v1;
+        zhpe_stats_stop(86);
+        zhpe_stats_start(86);
+        zhpe_stats_stop(86);
+        rdpmc(cpu_cyc_counter, cntlow_v1, cnthigh_v1);
+        rdpmc(cpu_cyc_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        b2b_rdpmc_c_total += v2 - v1;
+    }
+    avg_b2b_cpu_cyc = b2b_rdpmc_c_total/i;
+    avg_cpu_cyc = cyc_total/i;
+
+    /* hw_instr_counter */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
+    {
+        zhpe_stats_start(86);
+        zhpe_stats_stop(86);
+        rdpmc(hw_instr_counter, cntlow_v1, cnthigh_v1);
+        zhpe_stats_start(86);
+        rdpmc(hw_instr_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        inst_total += v2 - v1;
+        zhpe_stats_stop(86);
+        zhpe_stats_start(86);
+        zhpe_stats_stop(86);
+        rdpmc(hw_instr_counter, cntlow_v1, cnthigh_v1);
+        rdpmc(hw_instr_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        b2b_rdpmc_i_total += v2 - v1;
+    }
+    avg_b2b_hw_instr = b2b_rdpmc_i_total/i;
+    avg_hw_instr = inst_total/i;
+
+    struct zhpe_stats_record tmp;
+    tmp.subid= subid;
+    tmp.op_flag = opflag;
+
+    avg_b2b_rdtscp = b2b_rdtscp_total/i;
+    avg_rdtscp = rdtscp_total/i;
+    avg_hw_instr = inst_total/i;
+    avg_cpu_cyc = cyc_total/i;
+    tmp.val1 = avg_rdtscp;
+    tmp.val2 = avg_cpu_cyc;
+    tmp.val3 = avg_hw_instr;
+    tmp.val4 = avg_b2b_rdtscp;
+    tmp.val5 =  avg_b2b_cpu_cyc;
+    tmp.val6 = avg_b2b_hw_instr;
+
+    dest = stats_simple_nextslot(stats);
+    stats_memcpy_saveme((char *)dest, (char *)&tmp);
+
+    zhpe_stats_start(subid);
     zhpe_stats_start(86);
     zhpe_stats_stop(86);
-    zhpe_stats_start(8);
-    nop();
-    zhpe_stats_stop(8);
+    zhpe_stats_stop(subid);
+}
+
+void zhpe_stats_calibrate_cpu_startstop(uint32_t opflag, uint32_t subid)
+{
+    uint64_t v1, v2;
+    struct zhpe_stats_record *dest;
+    struct zhpe_stats *stats;
+    stats = pthread_getspecific(zhpe_stats_key);
+    int i;
+    unsigned int cntlow_v1, cnthigh_v1;
+    unsigned int cntlow_v2, cnthigh_v2;
+
+    uint64_t avg_rdtscp;
+    uint64_t avg_cpu_cyc;
+    uint64_t avg_hw_instr;
+
+    uint64_t avg_b2b_rdtscp;
+    uint64_t avg_b2b_cpu_cyc;
+    uint64_t avg_b2b_hw_instr;
+
+    uint64_t rdtscp_total=0;
+    uint64_t cyc_total=0;
+    uint64_t inst_total=0;
+
+    uint64_t b2b_rdtscp_total=0;
+    uint64_t b2b_rdpmc_c_total=0;
+    uint64_t b2b_rdpmc_i_total=0;
+
+
+    /* rdtscp */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
+    {
+        zhpe_stats_start(86);
+        do_rdtscp();
+        zhpe_stats_stop(86);
+        zhpe_stats_start(86);
+        zhpe_stats_stop(86);
+        v1 = do_rdtscp();
+        zhpe_stats_start(86);
+        zhpe_stats_stop(86);
+        v2 = do_rdtscp();
+        rdtscp_total += v2 - v1;
+        do_rdtscp();
+        do_rdtscp();
+        v1 = do_rdtscp();
+        v2 = do_rdtscp();
+        b2b_rdtscp_total += v2 - v1;
+    }
+    avg_b2b_rdtscp = b2b_rdtscp_total/i;
+    avg_rdtscp = rdtscp_total/i;
+
+    /* cpu_cyc_counter */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
+    {
+        zhpe_stats_start(86);
+        zhpe_stats_stop(86);
+        rdpmc(cpu_cyc_counter, cntlow_v1, cnthigh_v1);
+        zhpe_stats_start(86);
+        zhpe_stats_stop(86);
+        rdpmc(cpu_cyc_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        cyc_total += v2 - v1;
+        zhpe_stats_start(86);
+        zhpe_stats_stop(86);
+        rdpmc(cpu_cyc_counter, cntlow_v1, cnthigh_v1);
+        rdpmc(cpu_cyc_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        b2b_rdpmc_c_total += v2 - v1;
+    }
+    avg_b2b_cpu_cyc = b2b_rdpmc_c_total/i;
+    avg_cpu_cyc = cyc_total/i;
+
+    /* hw_instr_counter */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
+    {
+        zhpe_stats_start(86);
+        zhpe_stats_stop(86);
+        rdpmc(hw_instr_counter, cntlow_v1, cnthigh_v1);
+        zhpe_stats_start(86);
+        zhpe_stats_stop(86);
+        rdpmc(hw_instr_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        inst_total += v2 - v1;
+        zhpe_stats_start(86);
+        zhpe_stats_stop(86);
+        rdpmc(hw_instr_counter, cntlow_v1, cnthigh_v1);
+        rdpmc(hw_instr_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        b2b_rdpmc_i_total += v2 - v1;
+    }
+    avg_b2b_hw_instr = b2b_rdpmc_i_total/i;
+    avg_hw_instr = inst_total/i;
+
+    struct zhpe_stats_record tmp;
+    tmp.subid= subid;
+    tmp.op_flag = opflag;
+
+    avg_b2b_rdtscp = b2b_rdtscp_total/i;
+    avg_rdtscp = rdtscp_total/i;
+    avg_hw_instr = inst_total/i;
+    avg_cpu_cyc = cyc_total/i;
+    tmp.val1 = avg_rdtscp;
+    tmp.val2 = avg_cpu_cyc;
+    tmp.val3 = avg_hw_instr;
+    tmp.val4 = avg_b2b_rdtscp;
+    tmp.val5 =  avg_b2b_cpu_cyc;
+    tmp.val6 = avg_b2b_hw_instr;
+
+    dest = stats_simple_nextslot(stats);
+    stats_memcpy_saveme((char *)dest, (char *)&tmp);
+
+    zhpe_stats_start(subid);
+    zhpe_stats_start(86);
+    zhpe_stats_stop(subid);
+    zhpe_stats_stop(86);
 }
 
 
-void zhpe_rdtscp_calibrate()
+void zhpe_stats_calibrate_cpu_stamp(uint32_t opflag, uint32_t subid)
 {
     uint64_t v1, v2;
+    struct zhpe_stats_record *dest;
+    struct zhpe_stats *stats;
+    stats = pthread_getspecific(zhpe_stats_key);
+    int i;
+    unsigned int cntlow_v1, cnthigh_v1;
+    unsigned int cntlow_v2, cnthigh_v2;
+
+    uint64_t avg_rdtscp;
+    uint64_t avg_cpu_cyc;
+    uint64_t avg_hw_instr;
+
+    uint64_t avg_b2b_rdtscp;
+    uint64_t avg_b2b_cpu_cyc;
+    uint64_t avg_b2b_hw_instr;
+
+    uint64_t rdtscp_total=0;
+    uint64_t cyc_total=0;
+    uint64_t inst_total=0;
+
+    uint64_t b2b_rdtscp_total=0;
+    uint64_t b2b_rdpmc_c_total=0;
+    uint64_t b2b_rdpmc_i_total=0;
+
+
+    /* rdtscp */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
+    {
+        do_rdtscp();
+        v1 = do_rdtscp();
+        zhpe_stats_stamp(89888786, 89, 88, 87, 86);
+        v2 = do_rdtscp();
+        rdtscp_total += v2 - v1;
+        do_rdtscp();
+        do_rdtscp();
+        v1 = do_rdtscp();
+        v2 = do_rdtscp();
+        b2b_rdtscp_total += v2 - v1;
+    }
+    avg_b2b_rdtscp = b2b_rdtscp_total/i;
+    avg_rdtscp = rdtscp_total/i;
+
+    /* cpu_cyc_counter */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
+    {
+        rdpmc(cpu_cyc_counter, cntlow_v1, cnthigh_v1);
+        zhpe_stats_stamp(99888786, 99, 88, 87, 86);
+        rdpmc(cpu_cyc_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        cyc_total += v2 - v1;
+        rdpmc(cpu_cyc_counter, cntlow_v1, cnthigh_v1);
+        rdpmc(cpu_cyc_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        b2b_rdpmc_c_total += v2 - v1;
+    }
+    avg_b2b_cpu_cyc = b2b_rdpmc_c_total/i;
+    avg_cpu_cyc = cyc_total/i;
+
+    /* hw_instr_counter */
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
+    {
+        rdpmc(hw_instr_counter, cntlow_v1, cnthigh_v1);
+        zhpe_stats_stamp(99988786, 99, 98, 87, 86);
+        rdpmc(hw_instr_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        inst_total += v2 - v1;
+        rdpmc(hw_instr_counter, cntlow_v1, cnthigh_v1);
+        rdpmc(hw_instr_counter, cntlow_v2, cnthigh_v2);
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+        b2b_rdpmc_i_total += v2 - v1;
+    }
+    avg_b2b_hw_instr = b2b_rdpmc_i_total/i;
+    avg_hw_instr = inst_total/i;
+
+    struct zhpe_stats_record tmp;
+    tmp.subid= subid;
+    tmp.op_flag = opflag;
+
+    avg_b2b_rdtscp = b2b_rdtscp_total/i;
+    avg_rdtscp = rdtscp_total/i;
+    avg_hw_instr = inst_total/i;
+    avg_cpu_cyc = cyc_total/i;
+    tmp.val1 = avg_rdtscp;
+    tmp.val2 = avg_cpu_cyc;
+    tmp.val3 = avg_hw_instr;
+    tmp.val4 = avg_b2b_rdtscp;
+    tmp.val5 =  avg_b2b_cpu_cyc;
+    tmp.val6 = avg_b2b_hw_instr;
+
+    dest = stats_simple_nextslot(stats);
+    stats_memcpy_saveme((char *)dest, (char *)&tmp);
+
+    zhpe_stats_start(subid);
+    zhpe_stats_stamp(99998786, 99, 99, 87, 86);
+    zhpe_stats_stop(subid);
+}
+
+void zhpe_stats_test(uint16_t uid)
+{
+    zhpe_stats_open(uid);
+    zhpe_stats_enable();
+
+    zhpe_stats_start(0);
+    zhpe_stats_stop(0);
+
+    zhpe_stats_start(10);
+    zhpe_stats_stop(10);
+
+    zhpe_stats_start(20);
+    zhpe_stats_pause(20);
+    zhpe_stats_stop(20);
+
+    zhpe_stats_start(30);
+    nop();
+    zhpe_stats_stop(30);
+
+    zhpe_stats_start(40);
+    nop();
+    zhpe_stats_pause(40);
+    zhpe_stats_start(40);
+    nop();
+    nop();
+    zhpe_stats_stop(40);
+
+    zhpe_stats_start(50);
+    nop();
+    nop();
+    zhpe_stats_pause_all();
+    zhpe_stats_restart_all();
+    nop();
+    zhpe_stats_stop_all();
+
+    zhpe_stats_start(60);
+    zhpe_stats_start(70);
+    zhpe_stats_stop(70);
+    zhpe_stats_stop(60);
+
+    zhpe_stats_start(80);
+    nop();
+    zhpe_stats_start(90);
+    nop();
+    nop();
+    zhpe_stats_stop(80);
+    nop();
+    zhpe_stats_stop_all();
+
+    zhpe_stats_start(100);
+    nop();
+    nop();
+    zhpe_stats_start(110);
+    nop();
+    zhpe_stats_pause_all();
+    nop();
+    zhpe_stats_restart_all();
+    nop();
+    zhpe_stats_stop_all();
+
+    zhpe_stats_start(120);
+    nop();
+    zhpe_stats_start(130);
+    nop();
+    nop();
+
+    zhpe_stats_start(140);
+    nop();
+    zhpe_stats_start(150);
+    nop();
+    zhpe_stats_pause(140);
+    nop();
+    zhpe_stats_start(150);
+    nop();
+    zhpe_stats_stop(150);
+    zhpe_stats_stop(140);
+
+    zhpe_stats_start(160);
+    zhpe_stats_start(170);
+    nop();
+    zhpe_stats_stop(170);
+    zhpe_stats_stop(160);
+
+    zhpe_stats_stop(150);
+    zhpe_stats_stop(140);
+
+    zhpe_stats_stop_all();
+
+    zhpe_stats_close();
+}
+
+uint64_t dest1[8] CACHE_ALIGNED;
+
+uint64_t src1[8] CACHE_ALIGNED;
+
+void zhpe_stats_test_saveme(uint32_t opflag, uint32_t subid)
+{
+    uint64_t v1, v2;
+    uint64_t v3, v4;
+
+    uint64_t len = 64;
+    char *foo1, *foo2;
+    foo1=(char *)dest1;
+    foo2=(char *)src1;
 
     v1 = do_rdtscp();
     sleep(1);
     v2 = do_rdtscp();
     printf("[sleep(1): %lu] %s,%u\n", v2-v1, __func__, __LINE__);
 
-    int b=0,i;
+    zhpe_stats_calibrate_cpu_startstop(opflag, subid);
+    zhpe_stats_calibrate_cpu_start(opflag, subid+1);
 
-    printf("setting saveme to stats_nop_saveme:\n");
-    zhpe_stats_ops->saveme = stats_nop_saveme;
-    zhpe_cpu_calibrate_atm_inc(87);
-    zhpe_cpu_calibrate_nop(97);
-    printf("atm_inc after nop:\n");
-    for (i=0;i<10;i++)
-    {
-        atm_inc(&b);
-        atm_inc(&b);
-        atm_inc(&b);
-        atm_inc(&b);
-        atm_inc(&b);
-        v1 = do_rdtscp();
-        atm_inc(&b);
-        v2 = do_rdtscp();
-        printf("[atm_inc: v2-v1 is %lu]\n",v2-v1);
-    }
+    printf("testing impact of vmemcpy:\n");
+    int b=0;
+    atm_inc(&b);
+    atm_inc(&b);
+    v1 = do_rdtscp();
+    atm_inc(&b);
+    v2 = do_rdtscp();
+    __vmemcpy(movntdq, movntdqa, foo1, foo2, len);
+    v3 = do_rdtscp();
+    atm_inc(&b);
+    v4 = do_rdtscp();
+    printf("Before vmemcpy, atm_inc was %lu\n",v2-v1);
+    printf("After vmemcpy, atm_inc was %lu\n",v4-v3);
 
-    printf("setting saveme to stats_vmemcpy_saveme:\n");
-    zhpe_stats_ops->saveme = stats_vmemcpy_saveme;
-    zhpe_cpu_calibrate_atm_inc(88);
-    zhpe_cpu_calibrate_nop(98);
-    printf("atm_inc after vmemcpy:\n");
-    for (i=0;i<10;i++)
-    {
-        atm_inc(&b);
-        atm_inc(&b);
-        atm_inc(&b);
-        atm_inc(&b);
-        atm_inc(&b);
-        v1 = do_rdtscp();
-        atm_inc(&b);
-        v2 = do_rdtscp();
-        printf("[atm_inc: v2-v1 is %lu]\n",v2-v1);
-    }
-
-    printf("setting saveme to stats_memcpy_saveme:\n");
-    zhpe_stats_ops->saveme = stats_memcpy_saveme;
-    zhpe_cpu_calibrate_atm_inc(89);
-    zhpe_cpu_calibrate_nop(99);
-
-    printf("atm_inc after memcpy:\n");
-    for (i=0;i<10;i++)
-    {
-        atm_inc(&b);
-        atm_inc(&b);
-        atm_inc(&b);
-        atm_inc(&b);
-        atm_inc(&b);
-        v1 = do_rdtscp();
-        atm_inc(&b);
-        v2 = do_rdtscp();
-        printf("[atm_inc: v2-v1 is %lu]\n",v2-v1);
-    }
+    atm_inc(&b);
+    atm_inc(&b);
+    v1 = do_rdtscp();
+    atm_inc(&b);
+    v2 = do_rdtscp();
+    memcpy(foo1, foo2, len);
+    v3 = do_rdtscp();
+    atm_inc(&b);
+    v4 = do_rdtscp();
+    printf("Before memcpy, atm_inc was %lu\n",v2-v1);
+    printf("After memcpy, atm_inc was %lu\n",v4-v3);
 }
 
+
 /* single thread, no need to lock */
+/* for flush, record cpu profile stats */
+/* may later add cache records too */
 void zhpe_stats_flush(struct zhpe_stats *stats)
 {
     assert(stats);
@@ -652,14 +1314,14 @@ void zhpe_stats_flush(struct zhpe_stats *stats)
 
     struct zhpe_stats_record tmp;
 
-    zhpe_stats_ops->setvals(&tmp);
+    stats_cpu_setvals(&tmp);
     tmp.subid = 0;
     tmp.op_flag = ZHPE_STATS_FLUSH_START;
 
-    dest = &(stats->buffer[stats->head]);
-    zhpe_stats_ops->saveme((char *)dest, (char *)&tmp);
+    dest = stats_simple_nextslot(stats);
+    stats_memcpy_saveme((char *)dest, (char *)&tmp);
 
-    bufsize = sizeof(struct zhpe_stats_record) * stats->head;
+    bufsize = (sizeof(struct zhpe_stats_record) * stats->num_slots) ;
     io_wmb();
     res = write(stats->fd, stats->buffer, bufsize);
     if (check_func_ion(__func__, __LINE__, "write", bufsize, false,
@@ -668,31 +1330,22 @@ void zhpe_stats_flush(struct zhpe_stats *stats)
 
     stats->head = 0;
 
-    zhpe_stats_ops->setvals(&tmp);
+    stats_cpu_setvals(&tmp);
     tmp.op_flag = ZHPE_STATS_FLUSH_STOP;
-    dest = &(stats->buffer[stats->head]);
-    zhpe_stats_ops->saveme((char *)dest,(char *)&tmp);
-
-    stats->head++;
+    dest = stats_simple_nextslot(stats);
+    stats_memcpy_saveme((char *)dest,(char *)&tmp);
 }
 
-/* don't really close. Just log an event and flush stats. */
-static void stats_closeme(struct zhpe_stats *stats)
-{
-    if (!stats)
-        return;
-
-    stats_recordme(stats, 0, ZHPE_STATS_CLOSE);
-    zhpe_stats_flush(stats);
-}
-
+/* don't really close. Just log events for cpu profile and flush stats. */
 static void stats_close()
 {
     struct zhpe_stats   *stats;
     stats = pthread_getspecific(zhpe_stats_key);
     if (!stats)
         return ;
-    stats_closeme(stats);
+
+    cpu_stats_recordme(stats, 0, ZHPE_STATS_CLOSE);
+    zhpe_stats_flush(stats);
 }
 
 static void stats_key_destructor(void *vstats)
@@ -705,7 +1358,7 @@ static void stats_key_destructor(void *vstats)
     if (!stats->enabled)
         return;
 
-    stats_closeme(stats);
+    stats_close(stats);
 }
 
 void stats_finalize()
@@ -725,49 +1378,23 @@ void stats_finalize()
     }
 }
 
-static void stats_start(struct zhpe_stats *stats, uint32_t subid)
+/* cpu profile */
+static void cpu_stats_start(struct zhpe_stats *stats, uint32_t subid)
 {
-    stats_recordme(stats, subid, ZHPE_STATS_START);
+    cpu_stats_recordme(stats, subid, ZHPE_STATS_START);
 }
 
-static void stats_stop(struct zhpe_stats *stats, uint32_t subid)
+static void cpu_stats_stop(struct zhpe_stats *stats, uint32_t subid)
 {
-    stats_recordme(stats, subid, ZHPE_STATS_STOP);
+    cpu_stats_recordme(stats, subid, ZHPE_STATS_STOP);
 }
 
-static inline struct zhpe_stats *get_zhpe_stats(void)
+static void cpu_stats_pause(struct zhpe_stats *stats, uint32_t subid)
 {
-    struct zhpe_stats   *stats;
-    stats = pthread_getspecific(zhpe_stats_key);
-    return stats;
+    cpu_stats_recordme(stats, subid, ZHPE_STATS_PAUSE);
 }
 
-static void stats_pause(struct zhpe_stats *stats, uint32_t subid)
-{
-    stats_recordme(stats, subid, ZHPE_STATS_PAUSE);
-}
-
-static void stats_pause_all(struct zhpe_stats *stats)
-{
-    stats_recordme(stats, 0, ZHPE_STATS_PAUSE);
-}
-
-static void stats_restart_all(void)
-{
-    struct zhpe_stats   *stats;
-    stats = pthread_getspecific(zhpe_stats_key);
-    if (!stats)
-        return;
-
-    stats_recordme(stats, 0, ZHPE_STATS_RESTART);
-}
-
-static void stats_stop_all(struct zhpe_stats *stats)
-{
-    stats_recordme(stats, 0, ZHPE_STATS_STOP);
-}
-
-static void stats_enable()
+static void cpu_stats_enable()
 {
     struct zhpe_stats   *stats;
     stats = pthread_getspecific(zhpe_stats_key);
@@ -777,10 +1404,10 @@ static void stats_enable()
     stats->enabled = true;
     do_rdtscp();
     prctl(PR_TASK_PERF_EVENTS_ENABLE);
-    stats_recordme(stats, 0, ZHPE_STATS_ENABLE);
+    cpu_stats_recordme(stats, 0, ZHPE_STATS_ENABLE);
 }
 
-static void stats_disable()
+static void cpu_stats_disable()
 {
     struct zhpe_stats   *stats;
     stats = pthread_getspecific(zhpe_stats_key);
@@ -789,47 +1416,117 @@ static void stats_disable()
 
     do_rdtscp();
     stats->enabled = false;
-    stats_recordme(stats, 0, ZHPE_STATS_DISABLE);
+    cpu_stats_recordme(stats, 0, ZHPE_STATS_DISABLE);
     prctl(PR_TASK_PERF_EVENTS_DISABLE);
 }
 
+
+/* rdtscp profile */
+static void rdtscp_stats_start(struct zhpe_stats *stats, uint32_t subid)
+{
+    rdtscp_stats_recordme(stats, subid, ZHPE_STATS_START);
+}
+
+static void rdtscp_stats_stop(struct zhpe_stats *stats, uint32_t subid)
+{
+    rdtscp_stats_recordme(stats, subid, ZHPE_STATS_STOP);
+}
+
+static void rdtscp_stats_pause(struct zhpe_stats *stats, uint32_t subid)
+{
+    rdtscp_stats_recordme(stats, subid, ZHPE_STATS_PAUSE);
+}
+
+static void rdtscp_stats_enable()
+{
+    struct zhpe_stats   *stats;
+    stats = pthread_getspecific(zhpe_stats_key);
+    if (!stats)
+        return;
+
+    stats->enabled = true;
+    do_rdtscp();
+    prctl(PR_TASK_PERF_EVENTS_ENABLE);
+    rdtscp_stats_recordme(stats, 0, ZHPE_STATS_ENABLE);
+}
+
+static void rdtscp_stats_disable()
+{
+    struct zhpe_stats   *stats;
+    stats = pthread_getspecific(zhpe_stats_key);
+    if (!stats)
+        return;
+
+    do_rdtscp();
+    stats->enabled = false;
+    rdtscp_stats_recordme(stats, 0, ZHPE_STATS_DISABLE);
+    prctl(PR_TASK_PERF_EVENTS_DISABLE);
+}
+
+/* generic */
 static void stats_stamp(struct zhpe_stats *stats, uint32_t subid, uint32_t items, uint64_t *data)
 {
     struct zhpe_stats_record    *dest;
     struct zhpe_stats_record    tmp;
 
     tmp.subid = subid;
-
-    zhpe_stats_ops->setvals(&tmp);
     tmp.op_flag = ZHPE_STATS_STAMP;
 
+    tmp.val1 = do_rdtscp();
     tmp.val2 = items > 0 ? ((uint64_t *)data)[0] : 0;
     tmp.val3 = items > 1 ? ((uint64_t *)data)[1] : 0;
     tmp.val4 = items > 2 ? ((uint64_t *)data)[2] : 0;
     tmp.val5 = items > 3 ? ((uint64_t *)data)[3] : 0;
+    tmp.val6 = items > 4 ? ((uint64_t *)data)[4] : 0;
 
-    dest = zhpe_stats_ops->nextslot(stats);
-    zhpe_stats_ops->saveme((char *)dest, (char *)&tmp);
+    dest = stats_simple_nextslot(stats);
+    stats_memcpy_saveme((char *)dest, (char *)&tmp);
 }
 
-static struct zhpe_stats_ops stats_ops_perf_event = {
+static inline struct zhpe_stats *get_zhpe_stats(void)
+{
+    struct zhpe_stats   *stats;
+    stats = pthread_getspecific(zhpe_stats_key);
+    return stats;
+}
+
+static struct zhpe_stats_ops stats_ops_cpu = {
     .open               = stats_open,
     .close              = stats_close,
-    .enable             = stats_enable,
-    .disable            = stats_disable,
-    .get_zhpe_stats      = get_zhpe_stats,
-    .stop_all           = stats_stop_all,
-    .pause_all          = stats_pause_all,
-    .restart_all        = stats_restart_all,
-    .start              = stats_start,
-    .stop               = stats_stop,
-    .pause              = stats_pause,
+    .enable             = cpu_stats_enable,
+    .disable            = cpu_stats_disable,
+    .get_zhpe_stats     = get_zhpe_stats,
+    .stop_all           = stats_nop_stats,
+    .pause_all          = stats_nop_stats,
+    .restart_all        = stats_nop_void,
+    .start              = cpu_stats_start,
+    .stop               = cpu_stats_stop,
+    .pause              = cpu_stats_pause,
     .finalize           = stats_finalize,
     .key_destructor     = stats_key_destructor,
     .stamp              = stats_stamp,
-    .setvals            = stats_nop_setvals,
-    .nextslot           = stats_nop_nextslot,
-    .saveme             = stats_nop_saveme,
+    .setvals            = stats_cpu_setvals,
+    .saveme             = stats_memcpy_saveme,
+};
+
+
+static struct zhpe_stats_ops stats_ops_rdtscp = {
+    .open               = stats_open,
+    .close              = stats_close,
+    .enable             = rdtscp_stats_enable,
+    .disable            = rdtscp_stats_disable,
+    .get_zhpe_stats     = get_zhpe_stats,
+    .stop_all           = stats_nop_stats,
+    .pause_all          = stats_nop_stats,
+    .restart_all        = stats_nop_void,
+    .start              = rdtscp_stats_start,
+    .stop               = rdtscp_stats_stop,
+    .pause              = rdtscp_stats_pause,
+    .finalize           = stats_finalize,
+    .key_destructor     = stats_key_destructor,
+    .stamp              = stats_stamp,
+    .setvals            = stats_rdtscp_setvals,
+    .saveme             = stats_memcpy_saveme,
 };
 
 static void init_cpu_profile()
@@ -937,27 +1634,18 @@ bool zhpe_stats_init(const char *stats_dir, const char *stats_unique)
     {
         if (!strcmp("rdtscp",tmp)) {
             zhpe_stats_profile = ZHPE_STATS_RDTSCP;
-            zhpe_stats_ops = &stats_ops_perf_event;
-            zhpe_stats_ops->setvals = stats_rdtscp_setvals;
-            zhpe_stats_ops->nextslot = stats_flushing_nextslot;
-            zhpe_stats_ops->saveme = stats_memcpy_saveme;
+            zhpe_stats_ops = &stats_ops_rdtscp;
         }
 
         if (!strcmp("cpu",tmp)) {
             zhpe_stats_profile = ZHPE_STATS_CPU;
-            zhpe_stats_ops = &stats_ops_perf_event;
-            zhpe_stats_ops->setvals = stats_cpu_setvals;
-            zhpe_stats_ops->nextslot = stats_flushing_nextslot;
-            zhpe_stats_ops->saveme = stats_memcpy_saveme;
+            zhpe_stats_ops = &stats_ops_cpu;
             init_cpu_profile();
         }
 
         if (!strcmp("cache",tmp)) {
             zhpe_stats_profile = ZHPE_STATS_CACHE;
-            zhpe_stats_ops = &stats_ops_perf_event;
-            zhpe_stats_ops->setvals = stats_cache_setvals;
-            zhpe_stats_ops->nextslot = stats_simple_nextslot;
-            zhpe_stats_ops->saveme = stats_memcpy_saveme;
+            zhpe_stats_ops = &zhpe_stats_nops;
         }
     }
 
@@ -966,13 +1654,23 @@ bool zhpe_stats_init(const char *stats_dir, const char *stats_unique)
     if (tmp != NULL)
         zhpe_stats_buf_count=atoi(tmp);
 
+
     if ((zhpe_stats_buf_count <= 0) || (zhpe_stats_buf_count > ZHPE_STATS_BUF_COUNT_MAX))
         zhpe_stats_buf_count=ZHPE_STATS_BUF_COUNT_MAX;
+
+    if (zhpe_stats_buf_count & (zhpe_stats_buf_count -1)) {
+        zhpe_stats_buf_count = pow(2,ceil(log(zhpe_stats_buf_count)/log(2)));
+        print_err("%s,%u: rounded ZHPE_STATS_BUF_COUNT up to a power of 2: %lu\n",
+                  __func__, __LINE__, zhpe_stats_buf_count);
+    }
+
+    zhpe_stats_buf_mask=zhpe_stats_buf_count - 1;
 
     if (zhpe_stats_ops == &zhpe_stats_nops) {
         print_err("%s,%u:no statistics support available\n",
                   __func__, __LINE__);
         goto done;
+
     }
 
     zhpe_stats_dir = strdup_or_null(stats_dir);

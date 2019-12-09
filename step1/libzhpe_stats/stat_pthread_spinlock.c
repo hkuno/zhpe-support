@@ -107,7 +107,9 @@ int main(int argc, char **argv)
     zhpe_stats_init(argv[1], argv[2]);
     zhpe_stats_open(1);
     zhpe_stats_enable();
-    zhpe_rdtscp_calibrate();
+    zhpe_stats_calibrate_cpu_nop(888, 1);
+    zhpe_stats_calibrate_cpu_atm_inc(888, 2);
+//    zhpe_stats_test_saveme(888);
 
     /* 0 nops */
     int b=1;

@@ -104,6 +104,16 @@ int main(int argc, char **argv)
     zhpe_stats_open(1);
     zhpe_stats_enable();
 
+    zhpe_stats_calibrate_cpu_nop(111,111);
+    zhpe_stats_calibrate_cpu_atm_inc(222,222);
+    zhpe_stats_calibrate_rdtscp(333,333);
+    zhpe_stats_calibrate_rdpmc(444,444);
+    zhpe_stats_calibrate_cpu_start(555,555);
+    zhpe_stats_calibrate_cpu_startstop(666,666);
+    zhpe_stats_calibrate_cpu_stamp(777,777);
+
+    //zhpe_stats_test_saveme(888,8);
+
     /* 0 nops */
     for (i=0;i<10;i++) {
         zhpe_stats_start(0);

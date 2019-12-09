@@ -56,6 +56,8 @@ struct zhpe_stats_record {
     uint64_t    val3;
     uint64_t    val4;
     uint64_t    val5;
+    uint64_t    val6;
+    uint64_t    pad;
 } CACHE_ALIGNED;
 
 struct zhpe_stats_ops {
