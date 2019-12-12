@@ -1171,7 +1171,6 @@ void zhpe_stats_test(uint16_t uid)
     zhpe_stats_stop(10);
 
     zhpe_stats_start(20);
-    zhpe_stats_pause(20);
     zhpe_stats_stop(20);
 
     zhpe_stats_start(30);
@@ -1180,7 +1179,6 @@ void zhpe_stats_test(uint16_t uid)
 
     zhpe_stats_start(40);
     nop();
-    zhpe_stats_pause(40);
     zhpe_stats_start(40);
     nop();
     nop();
@@ -1189,8 +1187,6 @@ void zhpe_stats_test(uint16_t uid)
     zhpe_stats_start(50);
     nop();
     nop();
-    zhpe_stats_pause_all();
-    zhpe_stats_restart_all();
     nop();
     zhpe_stats_stop_all();
 
@@ -1213,9 +1209,7 @@ void zhpe_stats_test(uint16_t uid)
     nop();
     zhpe_stats_start(110);
     nop();
-    zhpe_stats_pause_all();
     nop();
-    zhpe_stats_restart_all();
     nop();
     zhpe_stats_stop_all();
 
@@ -1229,7 +1223,6 @@ void zhpe_stats_test(uint16_t uid)
     nop();
     zhpe_stats_start(150);
     nop();
-    zhpe_stats_pause(140);
     nop();
     zhpe_stats_start(150);
     nop();
@@ -1321,7 +1314,7 @@ void zhpe_stats_flush(struct zhpe_stats *stats)
     dest = stats_simple_nextslot(stats);
     stats_memcpy_saveme((char *)dest, (char *)&tmp);
 
-    bufsize = (sizeof(struct zhpe_stats_record) * stats->num_slots) ;
+    bufsize = (sizeof(struct zhpe_stats_record) * stats->head) ;
     io_wmb();
     res = write(stats->fd, stats->buffer, bufsize);
     if (check_func_ion(__func__, __LINE__, "write", bufsize, false,
@@ -1389,11 +1382,6 @@ static void cpu_stats_stop(struct zhpe_stats *stats, uint32_t subid)
     cpu_stats_recordme(stats, subid, ZHPE_STATS_STOP);
 }
 
-static void cpu_stats_pause(struct zhpe_stats *stats, uint32_t subid)
-{
-    cpu_stats_recordme(stats, subid, ZHPE_STATS_PAUSE);
-}
-
 static void cpu_stats_enable()
 {
     struct zhpe_stats   *stats;
@@ -1430,11 +1418,6 @@ static void rdtscp_stats_start(struct zhpe_stats *stats, uint32_t subid)
 static void rdtscp_stats_stop(struct zhpe_stats *stats, uint32_t subid)
 {
     rdtscp_stats_recordme(stats, subid, ZHPE_STATS_STOP);
-}
-
-static void rdtscp_stats_pause(struct zhpe_stats *stats, uint32_t subid)
-{
-    rdtscp_stats_recordme(stats, subid, ZHPE_STATS_PAUSE);
 }
 
 static void rdtscp_stats_enable()
@@ -1501,7 +1484,7 @@ static struct zhpe_stats_ops stats_ops_cpu = {
     .restart_all        = stats_nop_void,
     .start              = cpu_stats_start,
     .stop               = cpu_stats_stop,
-    .pause              = cpu_stats_pause,
+    .pause              = stats_nop_stats_uint32,
     .finalize           = stats_finalize,
     .key_destructor     = stats_key_destructor,
     .stamp              = stats_stamp,
@@ -1521,7 +1504,7 @@ static struct zhpe_stats_ops stats_ops_rdtscp = {
     .restart_all        = stats_nop_void,
     .start              = rdtscp_stats_start,
     .stop               = rdtscp_stats_stop,
-    .pause              = rdtscp_stats_pause,
+    .pause              = stats_nop_stats_uint32,
     .finalize           = stats_finalize,
     .key_destructor     = stats_key_destructor,
     .stamp              = stats_stamp,
