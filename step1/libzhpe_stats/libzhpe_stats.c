@@ -745,8 +745,8 @@ void zhpe_stats_calibrate_rdpmc (uint32_t opflag, uint32_t subid)
         rdpmc(cpu_cyc_counter, cntlow_v4, cnthigh_v1);
 
         v1 = do_rdtscp();
-        rdpmc(cpu_cyc_counter, cntlow_v3, cnthigh_v1);
-        rdpmc(cpu_cyc_counter, cntlow_v4, cnthigh_v1);
+        rdpmc(cpu_cyc_counter, cntlow_v3, cnthigh_v3);
+        rdpmc(cpu_cyc_counter, cntlow_v4, cnthigh_v4);
         v3 = ((long long)cntlow_v3) | ((long long)cnthigh_v3 ) << 32;
         v4 = ((long long)cntlow_v4) | ((long long)cnthigh_v4 ) << 32;
         v2 = do_rdtscp();
@@ -758,12 +758,12 @@ void zhpe_stats_calibrate_rdpmc (uint32_t opflag, uint32_t subid)
     /* cpu_cyc_counter */
     for (i=0;i<CALIBRATE_ITERATIONS;i++)
     {
-        rdpmc(cpu_cyc_counter, cntlow_v3, cnthigh_v1);
-        rdpmc(cpu_cyc_counter, cntlow_v4, cnthigh_v1);
+        rdpmc(cpu_cyc_counter, cntlow_v3, cnthigh_v3);
+        rdpmc(cpu_cyc_counter, cntlow_v4, cnthigh_v4);
 
         rdpmc(cpu_cyc_counter, cntlow_v1, cnthigh_v1);
-        rdpmc(cpu_cyc_counter, cntlow_v3, cnthigh_v1);
-        rdpmc(cpu_cyc_counter, cntlow_v4, cnthigh_v1);
+        rdpmc(cpu_cyc_counter, cntlow_v3, cnthigh_v3);
+        rdpmc(cpu_cyc_counter, cntlow_v4, cnthigh_v4);
         v3 = ((long long)cntlow_v3) | ((long long)cnthigh_v3 ) << 32;
         v4 = ((long long)cntlow_v4) | ((long long)cnthigh_v4 ) << 32;
         rdpmc(cpu_cyc_counter, cntlow_v2, cnthigh_v2);
