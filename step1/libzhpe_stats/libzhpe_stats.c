@@ -58,7 +58,7 @@ static_assert(sizeof(struct zhpe_stats_record)%64 == 0, "foo");
         : "c" (counter))
 
 /* copied from perf_event_open man page */
-static long perf_event_open(struct perf_event_attr *pea, pid_t pid,
+static int perf_event_open(struct perf_event_attr *pea, pid_t pid,
                int cpu, int group_fd, unsigned long flags)
 {
     int ret;

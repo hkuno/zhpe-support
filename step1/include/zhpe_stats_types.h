@@ -97,11 +97,12 @@ enum {
     ZHPE_STATS_ENABLE            = 5,
     ZHPE_STATS_DISABLE           = 6,
     ZHPE_STATS_RESTART           = 7,
-    ZHPE_STATS_OPEN              = 8,
-    ZHPE_STATS_STAMP             = 9,
+    ZHPE_STATS_STAMP             = 8,
+    ZHPE_STATS_OPEN              = 9,
     ZHPE_STATS_CLOSE             = 10,
     ZHPE_STATS_FLUSH_START       = 11,
     ZHPE_STATS_FLUSH_STOP        = 12,
+    ZHPE_STATS_CALIBRATE         = 100,
 };
 
 enum {

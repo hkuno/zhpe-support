@@ -104,13 +104,15 @@ int main(int argc, char **argv)
     zhpe_stats_open(1);
     zhpe_stats_enable();
 
-    zhpe_stats_calibrate_cpu_nop(111,111);
-    zhpe_stats_calibrate_cpu_atm_inc(222,222);
-    zhpe_stats_calibrate_rdtscp(333,333);
-    zhpe_stats_calibrate_rdpmc(444,444);
-    zhpe_stats_calibrate_cpu_start(555,555);
-    zhpe_stats_calibrate_cpu_startstop(666,666);
-    zhpe_stats_calibrate_cpu_stamp(777,777);
+#ifdef HAVE_ZHPE_STATS
+    zhpe_stats_calibrate_cpu_nop(ZHPE_STATS_CALIBRATE,111);
+    zhpe_stats_calibrate_cpu_atm_inc(ZHPE_STATS_CALIBRATE,222);
+    zhpe_stats_calibrate_rdtscp(ZHPE_STATS_CALIBRATE,333);
+    zhpe_stats_calibrate_rdpmc(ZHPE_STATS_CALIBRATE,444);
+    zhpe_stats_calibrate_cpu_start(ZHPE_STATS_CALIBRATE,555);
+    zhpe_stats_calibrate_cpu_startstop(ZHPE_STATS_CALIBRATE,666);
+    zhpe_stats_calibrate_cpu_stamp(ZHPE_STATS_CALIBRATE,777);
+#endif
 
     //zhpe_stats_test_saveme(888,8);
 
@@ -158,9 +160,9 @@ int main(int argc, char **argv)
 
     /* 10 nop */
     for (i=0;i<10;i++) {
-        zhpe_stats_start(100);
+        zhpe_stats_start(10);
         NOP10;
-        zhpe_stats_stop(100);
+        zhpe_stats_stop(10);
     }
 
     /* 100 nop */
@@ -188,5 +190,8 @@ int main(int argc, char **argv)
     zhpe_stats_close();
     zhpe_stats_finalize();
 
+    ret = 0;
+
     return ret;
 }
+
