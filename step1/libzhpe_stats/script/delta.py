@@ -157,10 +157,16 @@ def add_overhead_event_in_all_alive_list(profile_event):
             if event.key.subId == alive_event.key.subId and \
                event.key.sequence == alive_event.key.sequence:
                 #if a begining event
-                if OperationFlags.is_beginning_event(profile_event.opFlag):
+                if OperationFlags.is_beginning_event(profile_event.opFlag) or \
+                   OperationFlags.is_single_event(profile_event.opFlag):
+                    stop_event = ProfileData()
+                    if OperationFlags.is_single_event(profile_event.opFlag):
+                        #add in the overhead list as a start/stop event
+                        stop_event = profile_event
                     #add in the overhead list
-                    overhead = OverheadInterval(profile_event, ProfileData())
+                    overhead = OverheadInterval(profile_event, stop_event)
                     all_events_list[index_all_events].overhead.append(copy.deepcopy(overhead))
+                
                 #Do not save the STOP event that is related to the start event of this specific 
                 #SubID present in the top of the stack
                 elif profile_event.opFlag == OperationFlags.enSTOP and \

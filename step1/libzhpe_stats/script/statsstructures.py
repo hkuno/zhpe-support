@@ -32,6 +32,7 @@ class OperationFlags(c_uint32):
                      enENABLE:      "ENABLE",
                      enDISABLE:     "DISABLE",
                      enRESTART:     "RESTART",
+                     enSTAMP:       "STAMP",
                      enOPEN:        "OPEN",
                      enCLOSE:       "CLOSE",
                      enFLUSH_START: "FLUSH_START",
@@ -48,6 +49,10 @@ class OperationFlags(c_uint32):
                 opflag == OperationFlags.enDISABLE or \
                 opflag == OperationFlags.enOPEN    or \
                 opflag == OperationFlags.enFLUSH_START
+
+    @staticmethod
+    def is_single_event(opflag):
+        return opflag == OperationFlags.enSTAMP
 
     @staticmethod
     def does_end_event_match(opflagbegin, opflagend):
