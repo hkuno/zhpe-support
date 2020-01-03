@@ -37,6 +37,17 @@
 
 #include <zhpe_stats.h>
 
+/* Calibration SubIDs */
+enum {
+    ZHPE_STATS_SUBID_B2B         = 1,
+    ZHPE_STATS_SUBID_NOP         = 2,
+    ZHPE_STATS_SUBID_ATM_INC     = 3,
+    ZHPE_STATS_SUBID_STAMP       = 4,
+    ZHPE_STATS_SUBID_START       = 5,
+    ZHPE_STATS_SUBID_STARTSTOP   = 6,
+};
+
+
 #define NOP1    \
 do {            \
     nop();      \
@@ -92,102 +103,36 @@ static void usage(char * arg0)
 
 int main(int argc, char **argv)
 {
-    int                 ret = 1;
-    uint64_t            i;
+    bool                 ret = 1;
 
     if (argc != 3) {
         usage(argv[0]);
         exit(-1);
     }
 
-    zhpe_stats_init(argv[1], argv[2]);
+    ret = zhpe_stats_init(argv[1], argv[2]);
+    if (! ret) {
+        usage(argv[0]);
+        exit(ret);
+    }
+
     zhpe_stats_open(1);
     zhpe_stats_enable();
 
-#ifdef HAVE_ZHPE_STATS
-    zhpe_stats_calibrate_cpu_nop(ZHPE_STATS_CALIBRATE,111);
-    zhpe_stats_calibrate_cpu_atm_inc(ZHPE_STATS_CALIBRATE,222);
-    zhpe_stats_calibrate_rdtscp(ZHPE_STATS_CALIBRATE,333);
-    zhpe_stats_calibrate_rdpmc(ZHPE_STATS_CALIBRATE,444);
-    zhpe_stats_calibrate_cpu_start(ZHPE_STATS_CALIBRATE,555);
-    zhpe_stats_calibrate_cpu_startstop(ZHPE_STATS_CALIBRATE,666);
-    zhpe_stats_calibrate_cpu_stamp(ZHPE_STATS_CALIBRATE,777);
-#endif
+    zhpe_stats_calibrate_cpu_b2b(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_B2B);
+    zhpe_stats_calibrate_cpu_nop(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_NOP);
+    zhpe_stats_calibrate_cpu_atm_inc(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_ATM_INC);
+    zhpe_stats_calibrate_cpu_stamp(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_STAMP);
+    zhpe_stats_calibrate_cpu_start(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_START);
+    zhpe_stats_calibrate_cpu_startstop(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_STARTSTOP);
 
     //zhpe_stats_test_saveme(888,8);
 
-    /* 0 nops */
-    for (i=0;i<10;i++) {
-        zhpe_stats_start(0);
-        zhpe_stats_stop(0);
-    }
-
-    /* 1 nop */
-    for (i=0;i<10;i++) {
-        zhpe_stats_start(1);
-        NOP1;
-        zhpe_stats_stop(1);
-    }
-
-    /* 2 nop */
-    for (i=0;i<10;i++) {
-        zhpe_stats_start(2);
-        NOP1;
-        NOP1;
-        zhpe_stats_stop(2);
-    }
-
-    /* 3 nop */
-    for (i=0;i<10;i++) {
-        zhpe_stats_start(3);
-        NOP1;
-        NOP1;
-        NOP1;
-        zhpe_stats_stop(3);
-    }
-
-
-    /* 5 nop */
-    for (i=0;i<10;i++) {
-        zhpe_stats_start(5);
-        NOP1;
-        NOP1;
-        NOP1;
-        NOP1;
-        NOP1;
-        zhpe_stats_stop(5);
-    }
-
-    /* 10 nop */
-    for (i=0;i<10;i++) {
-        zhpe_stats_start(10);
-        NOP10;
-        zhpe_stats_stop(10);
-    }
-
-    /* 100 nop */
-    for (i=0;i<10;i++) {
-        zhpe_stats_start(100);
-        NOP100;
-        zhpe_stats_stop(100);
-    }
-
-    /* 1000 nop */
-    for (i=0;i<10;i++) {
-        zhpe_stats_start(1000);
-        NOP1000;
-        zhpe_stats_stop(1000);
-    }
-
-
-    /* sanity check stamp */
-    zhpe_stats_stamp(1, 1);
-    zhpe_stats_stamp(99, 99);
-    zhpe_stats_stamp(9998, 99, 98);
-    zhpe_stats_stamp(999897, 99, 98, 97);
-    zhpe_stats_stamp(89888786, 89, 88, 87, 86);
     zhpe_stats_stop_all();
     zhpe_stats_close();
+
+    zhpe_stats_test(2);
+
     zhpe_stats_finalize();
 
     ret = 0;

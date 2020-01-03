@@ -10,12 +10,12 @@ install(FILES
   DESTINATION include)
 install(PROGRAMS unpackdata.py DESTINATION libexec)
 
-add_executable(calibrate_stats calibrate_stats.c)
-set_target_properties(calibrate_stats PROPERTIES LINK_FLAGS " -DHAVE_ZHPE_STATS")
+add_executable(sanitycheck_stats sanitycheck_stats.c)
+set_target_properties(sanitycheck_stats PROPERTIES LINK_FLAGS " -DHAVE_ZHPE_STATS")
 target_link_libraries(
-  calibrate_stats PUBLIC zhpe_stats zhpeq_util)
+  sanitycheck_stats PUBLIC zhpe_stats zhpeq_util)
 
-install(TARGETS calibrate_stats DESTINATION libexec)
+install(TARGETS sanitycheck_stats DESTINATION libexec)
 
 add_executable(stat_pthread_spinlock stat_pthread_spinlock.c)
 set_target_properties(stat_pthread_spinlock PROPERTIES LINK_FLAGS " -DHAVE_ZHPE_STATS")

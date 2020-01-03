@@ -48,10 +48,9 @@ extern struct zhpe_stats_ops *zhpe_stats_ops;
 bool zhpe_stats_init(const char *stats_dir, const char *stats_unique);
 void zhpe_stats_test(uint16_t uid);
 void zhpe_stats_test_saveme(uint32_t opflag, uint32_t subid);
-void zhpe_stats_calibrate_cpu_atm_inc(uint32_t opflag, uint32_t subid);
+void zhpe_stats_calibrate_cpu_b2b(uint32_t opflag, uint32_t subid);
 void zhpe_stats_calibrate_cpu_nop(uint32_t opflag, uint32_t subid);
-void zhpe_stats_calibrate_rdpmc(uint32_t opflag, uint32_t subid);
-void zhpe_stats_calibrate_rdtscp(uint32_t opflag, uint32_t subid);
+void zhpe_stats_calibrate_cpu_atm_inc(uint32_t opflag, uint32_t subid);
 void zhpe_stats_calibrate_cpu_stamp(uint32_t opflag, uint32_t subid);
 void zhpe_stats_calibrate_cpu_start(uint32_t opflag, uint32_t subid);
 void zhpe_stats_calibrate_cpu_startstop(uint32_t opflag, uint32_t subid);
@@ -153,6 +152,13 @@ static inline bool zhpe_stats_init(const char *stats_dir,
 
 #define zhpe_stats_test(uid)            do {} while (0)
 #define zhpe_stats_calibrate(uid)       do {} while (0)
+#define zhpe_stats_calibrate_cpu_b2b(opflag, subid)       do {} while (0)
+#define zhpe_stats_calibrate_cpu_nop(opflag, subid)       do {} while (0)
+#define zhpe_stats_calibrate_cpu_atm_inc(opflag, subid)   do {} while (0)
+#define zhpe_stats_calibrate_cpu_stamp(opflag, subid)     do {} while (0)
+#define zhpe_stats_calibrate_cpu_start(opflag, subid)     do {} while (0)
+#define zhpe_stats_calibrate_cpu_startstop(opflag, subid) do {} while (0)
+
 #define zhpe_stats_finalize()           do {} while (0)
 #define zhpe_stats_open(uid)            do {} while (0)
 #define zhpe_stats_close()              do {} while (0)
