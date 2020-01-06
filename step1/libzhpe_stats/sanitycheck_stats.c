@@ -119,19 +119,19 @@ int main(int argc, char **argv)
     zhpe_stats_open(1);
     zhpe_stats_enable();
 
-    zhpe_stats_calibrate_cpu_b2b(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_B2B);
-    zhpe_stats_calibrate_cpu_nop(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_NOP);
-    zhpe_stats_calibrate_cpu_atm_inc(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_ATM_INC);
-    zhpe_stats_calibrate_cpu_stamp(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_STAMP);
-    zhpe_stats_calibrate_cpu_start(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_START);
-    zhpe_stats_calibrate_cpu_startstop(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_STARTSTOP);
+    zhpe_stats_calibrate_b2b(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_B2B);
+    zhpe_stats_calibrate_nop(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_NOP);
+    zhpe_stats_calibrate_atm_inc(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_ATM_INC);
+    zhpe_stats_calibrate_stamp(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_STAMP);
+    zhpe_stats_calibrate_start(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_START);
+    zhpe_stats_calibrate_startstop(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_STARTSTOP);
 
     //zhpe_stats_test_saveme(888,8);
 
     zhpe_stats_stop_all();
     zhpe_stats_close();
 
-    zhpe_stats_test(2);
+    zhpe_stats_test(0);
 
     zhpe_stats_finalize();
 

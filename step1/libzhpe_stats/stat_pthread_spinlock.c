@@ -108,8 +108,8 @@ int main(int argc, char **argv)
     zhpe_stats_open(1);
     zhpe_stats_enable();
 #ifdef HAVE_ZHPE_STATS
-    zhpe_stats_calibrate_cpu_nop(888, 1);
-    zhpe_stats_calibrate_cpu_atm_inc(888, 2);
+    zhpe_stats_calibrate_nop(888, 1);
+    zhpe_stats_calibrate_atm_inc(888, 2);
 #endif
 //    zhpe_stats_test_saveme(888);
 
