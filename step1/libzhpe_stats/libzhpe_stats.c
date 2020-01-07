@@ -446,10 +446,12 @@ void zhpe_stats_calibrate_b2b(uint32_t opflag, uint32_t subid)
     uint64_t rdtscp_total=0;
     uint64_t cntr1_total=0;
     uint64_t cntr2_total=0;
+    uint64_t cntr3_total=0;
 
     uint64_t avg_rdtscp;
     uint64_t avg_cntr1;
     uint64_t avg_cntr2;
+    uint64_t avg_cntr3;
 
     /* rdtscp */
     for (i=0;i<CALIBRATE_WARMUP;i++)
@@ -501,6 +503,24 @@ void zhpe_stats_calibrate_b2b(uint32_t opflag, uint32_t subid)
     }
     avg_cntr2 = cntr2_total/i;
 
+    /* zhpe_stats_cntr_list[2] */
+    for (i=0;i<CALIBRATE_WARMUP;i++) {
+        rdpmc(zhpe_stats_cntr_list[2], cntlow_v1, cnthigh_v1);
+        rdpmc(zhpe_stats_cntr_list[2], cntlow_v2, cnthigh_v2);
+    }
+
+    for (i=0;i<CALIBRATE_ITERATIONS;i++)
+    {
+        rdpmc(zhpe_stats_cntr_list[2], cntlow_v1, cnthigh_v1);
+        rdpmc(zhpe_stats_cntr_list[2], cntlow_v2, cnthigh_v2);
+
+        v1 = ((long long)cntlow_v1) | ((long long)cnthigh_v1 ) << 32;
+        v2 = ((long long)cntlow_v2) | ((long long)cnthigh_v2 ) << 32;
+
+        cntr3_total += v2 - v1;
+    }
+    avg_cntr3 = cntr3_total/i;
+
     struct zhpe_stats_record tmp;
     tmp.subid= subid;
     tmp.op_flag = opflag;
@@ -508,7 +528,7 @@ void zhpe_stats_calibrate_b2b(uint32_t opflag, uint32_t subid)
     tmp.val1 = avg_rdtscp;
     tmp.val2 = avg_cntr1;
     tmp.val3 = avg_cntr2;
-    tmp.val4 = 0;
+    tmp.val4 = avg_cntr3;
     tmp.val5 = 0;
     tmp.val6 = 0;
 
@@ -1523,7 +1543,6 @@ static void init_zhpe_stats_profile(__u32 petype, int count, ...)
     struct perf_event_attr pe;
 
     int         err;
-    int         zhpe_stats_fd;
     void        *addr;
     uint64_t    index, offset;
     __u64       peconfig;
@@ -1543,7 +1562,7 @@ static void init_zhpe_stats_profile(__u32 petype, int count, ...)
         zhpe_stats_fd_list[zhpe_stats_num_counters] = perf_event_open(&pe, 0, -1, -1, 0);
         if (zhpe_stats_fd_list[zhpe_stats_num_counters] < 0) {
             err = errno;
-            fprintf(stderr, "Error zhpe_stats_fd == %d; perf_event_open %llx returned error %d:%s\n", zhpe_stats_fd, pe.config,
+            fprintf(stderr, "Error zhpe_stats_fd == %d; perf_event_open %llx returned error %d:%s\n", zhpe_stats_fd_list[zhpe_stats_num_counters], pe.config,
                 err, strerror(err));
             exit(EXIT_FAILURE);
         }
