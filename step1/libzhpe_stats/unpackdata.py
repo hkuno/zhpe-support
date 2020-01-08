@@ -7,7 +7,11 @@ from ctypes import *
 import statistics
 
 class Metadata(Structure):
-    _fields_ = [('profileid', c_uint32)]
+    _fields_ = [('profileid', c_uint32),
+                ('perf_typeid', c_uint32),
+                ('config_count', c_int),
+                ('config_list', c_uint64 * 6),
+               ]
 
 class Record(Structure):
     _fields_ = [
@@ -21,6 +25,12 @@ class Record(Structure):
                 ('val6',   c_uint64),
                 ('pad',    c_uint64),
              ]
+
+def printMetadata(m):
+    print('profileid:{}, perf_typeid:{}, val1:rdtscp'.format(m.profileid,m.perf_typeid), end='')
+    for i in range(m.config_count):
+        print(',val{}_config:{}'.format(i+2,hex(m.config_list[i])), end='')
+    print('')
 
 def printRecordHeader():
     print('opflag,subid,val1,val2,val3,val4,val5,val6')
@@ -62,10 +72,11 @@ def unpackfile(afilename):
         total_array=[]
         cpl0_array=[]
         cpl3_array=[]
-        printRecordHeader()
         x = Record()
         m = Metadata()
         file.readinto(m)
+        printMetadata(m)
+        printRecordHeader()
         while file.readinto(x):
             val1_array.append(x.val1)
             val2_array.append(x.val2)

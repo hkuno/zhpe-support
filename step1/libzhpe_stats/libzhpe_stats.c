@@ -217,6 +217,8 @@ static size_t           zhpe_stats_profile;
 int zhpe_stats_num_counters=0;
 int *zhpe_stats_fd_list;
 uint64_t *zhpe_stats_cntr_list;
+uint64_t *zhpe_stats_config_list;
+__u32 perf_typeid;
 
 /* forward declarations */
 void zhpe_stats_flush(struct zhpe_stats *stats);
@@ -230,14 +232,29 @@ static void stats_cmn_finalize(void)
     zhpe_stats_ops = &zhpe_stats_nops;
 }
 
+static void stats_write_metadata(struct zhpe_stats *stats)
+{
+    int i, bufsize, res;
+
+    struct zhpe_stats_metadata metadata;
+    metadata.profileid = zhpe_stats_profile;
+    metadata.perf_typeid = perf_typeid;
+    metadata.config_count =  zhpe_stats_num_counters;
+    for (i=0;i< zhpe_stats_num_counters;i++){
+        metadata.config_list[i] = zhpe_stats_config_list[i];
+    }
+
+    bufsize = sizeof(struct zhpe_stats_metadata);
+    res = write(stats->fd, &metadata, bufsize);
+    if (check_func_ion(__func__, __LINE__, "write", bufsize, false,
+                       bufsize, res, 0) < 0)
+        abort();
+}
+
 static struct zhpe_stats *stats_open(uint16_t uid)
 {
     char                *fname = NULL;
     struct zhpe_stats   *stats;
-    int res, bufsize;
-
-    struct zhpe_stats_metadata metadata;
-    metadata.profileid = zhpe_stats_profile;
 
     stats = calloc(1, sizeof(*stats));
     if (!stats)
@@ -263,15 +280,12 @@ static struct zhpe_stats *stats_open(uint16_t uid)
         abort();
     }
 
-    bufsize=sizeof(struct zhpe_stats_metadata);
-    res = write(stats->fd, &metadata, bufsize);
-    if (check_func_ion(__func__, __LINE__, "write", bufsize, false,
-                       bufsize, res, 0) < 0)
-        abort();
+    stats_write_metadata(stats);
 
     abort_posix(pthread_setspecific, zhpe_stats_key, stats);
     stats->state = ZHPE_STATS_STOPPED;
     stats->enabled = false;
+
 
     free(fname);
     return stats;
@@ -381,6 +395,28 @@ static void stats_setvals_4_rdpmc(struct zhpe_stats_record *rec)
     rec->val4 = ((long long)cnt3low) | ((long long)cnt3high ) << 32;
     rec->val5 = ((long long)cnt4low) | ((long long)cnt4high ) << 32;
     rec->val6 = 0;
+    rec->pad  = 0;
+}
+
+static void stats_setvals_5_rdpmc(struct zhpe_stats_record *rec)
+{
+    unsigned int cnt1low, cnt1high;
+    unsigned int cnt2low, cnt2high;
+    unsigned int cnt3low, cnt3high;
+    unsigned int cnt4low, cnt4high;
+    unsigned int cnt5low, cnt5high;
+
+    rec->val1 = do_rdtscp();
+    rdpmc(zhpe_stats_cntr_list[0], cnt1low, cnt1high);
+    rdpmc(zhpe_stats_cntr_list[1], cnt2low, cnt2high);
+    rdpmc(zhpe_stats_cntr_list[2], cnt3low, cnt3high);
+    rdpmc(zhpe_stats_cntr_list[3], cnt4low, cnt4high);
+    rdpmc(zhpe_stats_cntr_list[4], cnt5low, cnt5high);
+    rec->val2 = ((long long)cnt1low) | ((long long)cnt1high ) << 32;
+    rec->val3 = ((long long)cnt2low) | ((long long)cnt2high ) << 32;
+    rec->val4 = ((long long)cnt3low) | ((long long)cnt3high ) << 32;
+    rec->val5 = ((long long)cnt4low) | ((long long)cnt4high ) << 32;
+    rec->val6 = ((long long)cnt5low) | ((long long)cnt5high ) << 32;
     rec->pad  = 0;
 }
 
@@ -1532,6 +1568,25 @@ static struct zhpe_stats_ops stats_ops_4_rdpmc = {
     .saveme             = stats_memcpy_saveme,
 };
 
+static struct zhpe_stats_ops stats_ops_5_rdpmc = {
+    .open               = stats_open,
+    .close              = stats_close,
+    .enable             = stats_enable,
+    .disable            = stats_disable,
+    .get_zhpe_stats     = get_zhpe_stats,
+    .stop_all           = stats_nop_stats,
+    .pause_all          = stats_nop_stats,
+    .restart_all        = stats_nop_void,
+    .start              = stats_start,
+    .stop               = stats_stop,
+    .pause              = stats_nop_stats_uint32,
+    .finalize           = stats_finalize,
+    .key_destructor     = stats_key_destructor,
+    .stamp              = stats_stamp,
+    .setvals            = stats_setvals_5_rdpmc,
+    .saveme             = stats_memcpy_saveme,
+};
+
 static void init_zhpe_stats_profile(__u32 petype, int count, ...)
 {
     va_list args;
@@ -1539,6 +1594,7 @@ static void init_zhpe_stats_profile(__u32 petype, int count, ...)
 
     zhpe_stats_fd_list = calloc(count, sizeof(int));
     zhpe_stats_cntr_list = calloc(count, sizeof(uint64_t));
+    zhpe_stats_config_list = calloc(count, sizeof(uint64_t));
 
     struct perf_event_attr pe;
 
@@ -1558,6 +1614,8 @@ static void init_zhpe_stats_profile(__u32 petype, int count, ...)
         pe.type = petype;
         pe.config = peconfig;
         pe.exclude_kernel = 1;
+
+        zhpe_stats_config_list[zhpe_stats_num_counters] = peconfig;
 
         zhpe_stats_fd_list[zhpe_stats_num_counters] = perf_event_open(&pe, 0, -1, -1, 0);
         if (zhpe_stats_fd_list[zhpe_stats_num_counters] < 0) {
@@ -1620,55 +1678,45 @@ bool zhpe_stats_init(const char *stats_dir, const char *stats_unique)
 
         if (!strcmp("cpu",tmp)) {
             zhpe_stats_profile = ZHPE_STATS_CPU;
-            zhpe_stats_ops = &stats_ops_3_rdpmc;
-            init_zhpe_stats_profile(PERF_TYPE_HARDWARE,3,PERF_COUNT_HW_INSTRUCTIONS,PERF_COUNT_HW_CPU_CYCLES,PERF_COUNT_HW_CACHE_REFERENCES);
+            perf_typeid = PERF_TYPE_HARDWARE;
+            zhpe_stats_ops = &stats_ops_5_rdpmc;
+            init_zhpe_stats_profile(PERF_TYPE_HARDWARE,5,PERF_COUNT_HW_INSTRUCTIONS,PERF_COUNT_HW_CPU_CYCLES,PERF_COUNT_HW_CACHE_REFERENCES,PERF_COUNT_HW_BRANCH_INSTRUCTIONS,PERF_COUNT_HW_BRANCH_MISSES);
         }
 
         if (!strcmp("cache",tmp)) {
             zhpe_stats_profile = ZHPE_STATS_CACHE;
             zhpe_stats_ops = &stats_ops_3_rdpmc;
-
-            __u64 L1_RESULT_ACCESS, L1_RESULT_MISS, ALL_DC_ACCESSES;
-
-/*
-            L1_RESULT_ACCESS = PERF_COUNT_HW_CACHE_L1D|(PERF_COUNT_HW_CACHE_OP_READ << 8)|(PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16);
-            L1_RESULT_MISS   = PERF_COUNT_HW_CACHE_L1D|(PERF_COUNT_HW_CACHE_OP_READ << 8)|(PERF_COUNT_HW_CACHE_RESULT_MISS << 16);
-            init_zhpe_stats_profile(PERF_TYPE_HW_CACHE, 2, L1_RESULT_ACCESS, L1_RESULT_MISS);
-
-            For the moment, set the type to PERF_TYPE_RAW and the config to 0x40 for read accesses and 0xc860 for read misses.
-*/
-
-/*
-John Byrne:
-    All L2 Cache Accesses Event[0x43F960] + Event[0x431F70] +
-    Event[0x431F71] + Event[0x431F72]
-    All L2 Cache Misses Event[0x430964] + Event[0x431F71] +
-    Event[0x431F72] 
-
-    All DC Accesses Event[0x430729]  (I assume this is L1D read  + writes]
-*/
-            L1_RESULT_ACCESS = 0x40;
-            L1_RESULT_MISS   = 0xc860;
-            ALL_DC_ACCESSES  = 0x430729;
-            init_zhpe_stats_profile(PERF_TYPE_RAW, 3, L1_RESULT_ACCESS, L1_RESULT_MISS, ALL_DC_ACCESSES);
+            perf_typeid = PERF_TYPE_RAW;
+            init_zhpe_stats_profile(perf_typeid, 3, L1_RESULT_ACCESS, L1_RESULT_MISS, ALL_DC_ACCESSES);
         }
 
         if (!strcmp("foo2",tmp)) {
             zhpe_stats_profile = ZHPE_STATS_CPU;
             zhpe_stats_ops = &stats_ops_2_rdpmc;
-            init_zhpe_stats_profile(PERF_TYPE_HARDWARE,2,PERF_COUNT_HW_INSTRUCTIONS,PERF_COUNT_HW_CPU_CYCLES);
+            perf_typeid = PERF_TYPE_HARDWARE;
+            init_zhpe_stats_profile(perf_typeid,2,PERF_COUNT_HW_INSTRUCTIONS,PERF_COUNT_HW_CPU_CYCLES);
         }
 
         if (!strcmp("foo4",tmp)) {
             zhpe_stats_profile = ZHPE_STATS_CPU;
             zhpe_stats_ops = &stats_ops_4_rdpmc;
-            init_zhpe_stats_profile(PERF_TYPE_HARDWARE,2,PERF_COUNT_HW_INSTRUCTIONS,PERF_COUNT_HW_CPU_CYCLES,PERF_COUNT_HW_INSTRUCTIONS,PERF_COUNT_HW_INSTRUCTIONS);
+            perf_typeid = PERF_TYPE_HARDWARE;
+            init_zhpe_stats_profile(perf_typeid,2,PERF_COUNT_HW_INSTRUCTIONS,PERF_COUNT_HW_CPU_CYCLES,PERF_COUNT_HW_INSTRUCTIONS,PERF_COUNT_HW_INSTRUCTIONS);
         }
+
+        if (!strcmp("foo5",tmp)) {
+            zhpe_stats_profile = ZHPE_STATS_CPU;
+            zhpe_stats_ops = &stats_ops_5_rdpmc;
+            perf_typeid = PERF_TYPE_HARDWARE;
+            init_zhpe_stats_profile(perf_typeid,2,PERF_COUNT_HW_INSTRUCTIONS,PERF_COUNT_HW_CPU_CYCLES,PERF_COUNT_HW_INSTRUCTIONS,PERF_COUNT_HW_INSTRUCTIONS);
+        }
+
     } else {
         print_err("%s,%u: ZHPE_STATS_PROFILE not set. Defaulting to cpu profile.\n", __func__, __LINE__);
         zhpe_stats_profile = ZHPE_STATS_CPU;
         zhpe_stats_ops = &stats_ops_3_rdpmc;
-        init_zhpe_stats_profile(PERF_TYPE_HARDWARE,3,PERF_COUNT_HW_INSTRUCTIONS,PERF_COUNT_HW_CPU_CYCLES,PERF_COUNT_HW_CACHE_REFERENCES);
+        perf_typeid = PERF_TYPE_HARDWARE;
+        init_zhpe_stats_profile(perf_typeid,3,PERF_COUNT_HW_INSTRUCTIONS,PERF_COUNT_HW_CPU_CYCLES,PERF_COUNT_HW_CACHE_REFERENCES);
     }
 
     zhpe_stats_buf_count=0;

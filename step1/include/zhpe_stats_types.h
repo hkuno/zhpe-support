@@ -46,6 +46,16 @@ _EXTERN_C_BEG
 
 struct zhpe_stats_metadata {
     uint32_t    profileid;
+    uint32_t    perf_typeid;
+    int         config_count;
+    uint64_t    config_list[6];
+};
+
+/* John Byrne's magic perf_hw_cache counters */
+enum {
+    L1_RESULT_ACCESS            = 0x40,
+    L1_RESULT_MISS              = 0xc860,
+    ALL_DC_ACCESSES             = 0x430729,
 };
 
 struct zhpe_stats_record {
