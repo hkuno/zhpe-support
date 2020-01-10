@@ -39,12 +39,14 @@
 
 /* Calibration SubIDs */
 enum {
-    ZHPE_STATS_SUBID_B2B         = 1,
-    ZHPE_STATS_SUBID_NOP         = 2,
-    ZHPE_STATS_SUBID_ATM_INC     = 3,
-    ZHPE_STATS_SUBID_STAMP       = 4,
-    ZHPE_STATS_SUBID_START       = 5,
-    ZHPE_STATS_SUBID_STARTSTOP   = 6,
+    ZHPE_STATS_SUBID_B2B             = 1,
+    ZHPE_STATS_SUBID_NOP             = 2,
+    ZHPE_STATS_SUBID_ATM_INC         = 3,
+    ZHPE_STATS_SUBID_STAMP           = 4,
+    ZHPE_STATS_SUBID_START           = 5,
+    ZHPE_STATS_SUBID_STARTSTOP       = 6,
+    ZHPE_STATS_SUBID_DCACHE_ACCESS    = 7,
+    ZHPE_STATS_SUBID_DCACHE_MISS      = 8,
 };
 
 
@@ -103,7 +105,8 @@ static void usage(char * arg0)
 
 int main(int argc, char **argv)
 {
-    bool                 ret = 1;
+    bool  ret = 1;
+    int   A[1000];
 
     if (argc != 3) {
         usage(argv[0]);
@@ -116,17 +119,47 @@ int main(int argc, char **argv)
         exit(ret);
     }
 
-    zhpe_stats_open(1);
+    zhpe_stats_open(8);
     zhpe_stats_enable();
 
+    zhpe_stats_start(ZHPE_STATS_SUBID_DCACHE_ACCESS);
+    A[0]=1;
+    zhpe_stats_stop(ZHPE_STATS_SUBID_DCACHE_ACCESS);
+
+    zhpe_stats_start(ZHPE_STATS_SUBID_DCACHE_ACCESS);
+    zhpe_stats_start(ZHPE_STATS_SUBID_STARTSTOP);
+    A[75]=1;
+    zhpe_stats_stop(ZHPE_STATS_SUBID_STARTSTOP);
+    zhpe_stats_stop(ZHPE_STATS_SUBID_DCACHE_ACCESS);
+
+    zhpe_stats_start(ZHPE_STATS_SUBID_DCACHE_ACCESS);
+    zhpe_stats_start(ZHPE_STATS_SUBID_STARTSTOP);
+    zhpe_stats_start(ZHPE_STATS_SUBID_STARTSTOP);
+    A[150]=1;
+    zhpe_stats_stop(ZHPE_STATS_SUBID_STARTSTOP);
+    zhpe_stats_stop(ZHPE_STATS_SUBID_STARTSTOP);
+    zhpe_stats_stop(ZHPE_STATS_SUBID_DCACHE_ACCESS);
+
+    zhpe_stats_start(ZHPE_STATS_SUBID_DCACHE_ACCESS);
+    zhpe_stats_start(ZHPE_STATS_SUBID_STARTSTOP);
+    zhpe_stats_start(ZHPE_STATS_SUBID_STARTSTOP);
+    zhpe_stats_start(ZHPE_STATS_SUBID_STARTSTOP);
+    A[150]=1;
+    zhpe_stats_stop(ZHPE_STATS_SUBID_STARTSTOP);
+    zhpe_stats_stop(ZHPE_STATS_SUBID_STARTSTOP);
+    zhpe_stats_stop(ZHPE_STATS_SUBID_STARTSTOP);
+    zhpe_stats_stop(ZHPE_STATS_SUBID_DCACHE_ACCESS);
+    if (A[0] == 0)
+        printf("foobar\n");
+/*
     zhpe_stats_calibrate_b2b(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_B2B);
     zhpe_stats_calibrate_nop(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_NOP);
     zhpe_stats_calibrate_atm_inc(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_ATM_INC);
     zhpe_stats_calibrate_stamp(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_STAMP);
     zhpe_stats_calibrate_start(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_START);
     zhpe_stats_calibrate_startstop(ZHPE_STATS_CALIBRATE,ZHPE_STATS_SUBID_STARTSTOP);
+*/
 
-    //zhpe_stats_test_saveme(888,8);
 
     zhpe_stats_stop_all();
     zhpe_stats_close();

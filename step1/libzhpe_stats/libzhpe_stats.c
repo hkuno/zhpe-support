@@ -1680,7 +1680,7 @@ bool zhpe_stats_init(const char *stats_dir, const char *stats_unique)
             zhpe_stats_profile = ZHPE_STATS_CPU;
             perf_typeid = PERF_TYPE_HARDWARE;
             zhpe_stats_ops = &stats_ops_5_rdpmc;
-            init_zhpe_stats_profile(PERF_TYPE_HARDWARE,5,PERF_COUNT_HW_INSTRUCTIONS,PERF_COUNT_HW_CPU_CYCLES,PERF_COUNT_HW_CACHE_REFERENCES,PERF_COUNT_HW_BRANCH_INSTRUCTIONS,PERF_COUNT_HW_BRANCH_MISSES);
+            init_zhpe_stats_profile(PERF_TYPE_HARDWARE,5,PERF_COUNT_HW_INSTRUCTIONS,PERF_COUNT_HW_CPU_CYCLES,PERF_COUNT_HW_BRANCH_INSTRUCTIONS,PERF_COUNT_HW_BRANCH_MISSES);
         }
 
         if (!strcmp("cache",tmp)) {
