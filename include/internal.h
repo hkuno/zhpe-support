@@ -50,7 +50,8 @@
 
 _EXTERN_C_BEG
 
-#define DEV_NAME        "/dev/"DRIVER_NAME
+#define DEV_PATH        "/dev/"DRIVER_NAME
+#define PLATFORM_PATH   "/sys/module/"DRIVER_NAME"/parameters/platform"
 
 struct key_data_packed;
 
@@ -79,7 +80,8 @@ struct backend_ops {
     int                 (*zmmu_reg)(struct zhpeq_key_data *qkdata);
     int                 (*zmmu_free)(struct zhpeq_key_data *qkdata);
     int                 (*fam_qkdata)(struct zhpeq_dom *zdom, int open_idx,
-                                      struct zhpeq_key_data **qkdata_out);
+                                      struct zhpeq_key_data **qkdata_out,
+                                      size_t *n_qkdata_out);
     int                 (*mmap)(const struct zhpeq_key_data *qkdata,
                                 uint32_t cache_mode, void *addr,
                                 size_t length, int prot, int flags,
@@ -96,7 +98,8 @@ struct backend_ops {
 
 extern uuid_t           zhpeq_uuid;
 
-void zhpeq_register_backend(enum zhpe_backend backend, struct backend_ops *ops);
+void zhpeq_register_backend(enum zhpeq_backend backend,
+                            struct backend_ops *ops);
 void zhpeq_backend_libfabric_init(int fd);
 void zhpeq_backend_zhpe_init(int fd);
 
@@ -144,7 +147,7 @@ struct zhpeq {
 
 static inline uint8_t cq_valid(uint32_t idx, uint32_t qmask)
 {
-    return ((idx & (qmask + 1)) ? 0 : ZHPE_HW_CQ_VALID);
+    return ((idx & (qmask + 1)) ? 0 : ZHPE_CMP_ENT_VALID_MASK);
 }
 
 static inline uint64_t ioread64(const volatile void *addr)
@@ -192,8 +195,11 @@ static inline void unpack_kdata(const struct key_data_packed *pdata,
     kdata->access = pdata->access;
 }
 
-#define ZHPEQ_MR_V1             (1U)
-#define ZHPEQ_MR_REMOTE         ((uint32_t)1 << 31)
+#define ZHPEQ_MR_VREMOTE        ((uint32_t)1 << 31)
+#define ZHPEQ_MR_VREG           ((uint32_t)1 << 30)
+#define ZHPEQ_MR_V1             ((uint32_t)1U)
+#define ZHPEQ_MR_VMASK          ((uint32_t)0xFFFF)
+#define ZHPEQ_MR_V1REMOTE       (ZHPEQ_MR_V1 | ZHPEQ_MR_VREMOTE)
 
 struct zhpeq_mr_desc_common_hdr {
     uint32_t            magic;

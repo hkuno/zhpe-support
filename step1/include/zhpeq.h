@@ -87,28 +87,18 @@ enum zhpeq_atomic_op {
 };
 
 #define ZHPEQ_CQ_STATUS_SUCCESS ZHPE_HW_CQ_STATUS_SUCCESS
-#define ZHPEQ_CQ_STATUS_CMD_TRUNCATED \
-    ZHPE_HW_CQ_STATUS_TRUNCATED
-#define ZHPEQ_CQ_STATUS_BAD_CMD ZHPE_HW_CQ_STATUS_BAD_CMD
-#define ZHPEQ_CQ_STATUS_LOCAL_UNRECOVERABLE \
-    ZHPE_HW_CQ_STATUS_LOCAL_UNRECOVERABLE
-#define ZHPEQ_CQ_STATUS_FABRIC_UNRECOVERABLE \
-    ZHPE_HW_CQ_STATUS_FABRIC_UNRECOVERABLE
-#define ZHPEQ_CQ_STATUS_FABRIC_NO_RESOURCES \
-    ZHPE_HW_CQ_STATUS_FABRIC_NO_RESOURCES
-#define ZHPEQ_CQ_STATUS_FABRIC_ACCESS \
-    ZHPE_HW_CQ_STATUS_FABRIC_ACCESS
 
 enum zhpeq_backend {
-    ZHPEQ_BACKEND_ZHPE          = ZHPE_BACKEND_ZHPE,
-    ZHPEQ_BACKEND_LIBFABRIC     = ZHPE_BACKEND_LIBFABRIC,
-    ZHPEQ_BACKEND_MAX           = ZHPE_BACKEND_MAX,
+    ZHPEQ_BACKEND_NONE,
+    ZHPEQ_BACKEND_ZHPE,
+    ZHPEQ_BACKEND_LIBFABRIC,
+    ZHPEQ_BACKEND_MAX,
 };
 
 enum {
     ZHPEQ_PRI_MAX               = 1,
     ZHPEQ_TC_MAX                = 15,
-    ZHPEQ_IMM_MAX               = ZHPE_IMM_MAX,
+    ZHPEQ_IMM_MAX               = ZHPE_MAX_IMM,
     ZHPEQ_KEY_BLOB_MAX          = 32,
 };
 
@@ -211,7 +201,7 @@ int zhpeq_qkdata_import(struct zhpeq_dom *zdom, int open_idx,
                         struct zhpeq_key_data **qkdata_out);
 
 int zhpeq_fam_qkdata(struct zhpeq_dom *zdom, int open_idx,
-                     struct zhpeq_key_data **qkdata_out);
+                     struct zhpeq_key_data **qkdata_out, size_t *n_qkdata);
 
 int zhpeq_zmmu_reg(struct zhpeq_key_data *qkdata);
 
