@@ -3,6 +3,7 @@
 import os
 import struct
 import sys
+import math
 from ctypes import *
 import numpy as np
 
@@ -40,7 +41,11 @@ class OperationFlags(c_uint32):
 
     @staticmethod
     def get_str(opflag):
-        return OperationFlags.op_flags_dict[opflag]
+        if opflag <= OperationFlags.enFLUSH_STOP and opflag != 0:
+            return OperationFlags.op_flags_dict[opflag]
+        else:
+            return "UNKNOWN"
+
 
     @staticmethod
     def is_beginning_event(opflag):
@@ -63,6 +68,75 @@ class OperationFlags(c_uint32):
                (opflagbegin == OperationFlags.enSTART and opflagend == OperationFlags.enSTOP)      or \
                (opflagbegin == OperationFlags.enFLUSH_START and opflagend == OperationFlags.enFLUSH_STOP))
 
+
+
+class ProfileDataMath(Structure):
+
+    def __init__(self, val1=0, val2=0, val3=0, val4=0, val5=0, val6=0):
+        self.val1 = val1
+        self.val2 = val2
+        self.val3 = val3
+        self.val4 = val4
+        self.val5 = val5
+        self.val6 = val6
+
+    def __add__(self, other):
+        profile_data = ProfileDataMath()
+        profile_data.val1 = self.val1 + other.val1
+        profile_data.val2 = self.val2 + other.val2
+        profile_data.val3 = self.val3 + other.val3
+        profile_data.val4 = self.val4 + other.val4
+        profile_data.val5 = self.val5 + other.val5
+        profile_data.val6 = self.val6 + other.val6
+        return profile_data
+
+    def __sub__(self, other):
+        profile_data = ProfileDataMath()
+        profile_data.val1 = self.val1 - other.val1
+        profile_data.val2 = self.val2 - other.val2
+        profile_data.val3 = self.val3 - other.val3
+        profile_data.val4 = self.val4 - other.val4
+        profile_data.val5 = self.val5 - other.val5
+        profile_data.val6 = self.val6 - other.val6
+        return profile_data
+
+    def __truediv__(self, value):
+        profile_data = ProfileDataMath()
+        profile_data.val1 = math.ceil(self.val1/value)
+        profile_data.val2 = math.ceil(self.val2/value)
+        profile_data.val3 = math.ceil(self.val3/value)
+        profile_data.val4 = math.ceil(self.val4/value)
+        profile_data.val5 = math.ceil(self.val5/value)
+        profile_data.val6 = math.ceil(self.val6/value)
+        return profile_data
+
+    def __mul__(self, other):
+        profile_data = ProfileDataMath()
+        profile_data.val1 = math.ceil(self.val1*other)
+        profile_data.val2 = math.ceil(self.val2*other)
+        profile_data.val3 = math.ceil(self.val3*other)
+        profile_data.val4 = math.ceil(self.val4*other)
+        profile_data.val5 = math.ceil(self.val5*other)
+        profile_data.val6 = math.ceil(self.val6*other)
+        return profile_data
+
+    def get_higher(self, other):
+        self.val1 = self.val1 if self.val1 >= other.val1 else other.val1
+        self.val2 = self.val2 if self.val2 >= other.val2 else other.val2
+        self.val3 = self.val3 if self.val3 >= other.val3 else other.val3
+        self.val4 = self.val4 if self.val4 >= other.val4 else other.val4
+        self.val5 = self.val5 if self.val5 >= other.val5 else other.val5
+        self.val6 = self.val6 if self.val6 >= other.val6 else other.val6
+        return self
+
+    def get_lower(self, other):
+        self.val1 = self.val1 if self.val1 <= other.val1 else other.val1
+        self.val2 = self.val2 if self.val2 <= other.val2 else other.val2
+        self.val3 = self.val3 if self.val3 <= other.val3 else other.val3
+        self.val4 = self.val4 if self.val4 <= other.val4 else other.val4
+        self.val5 = self.val5 if self.val5 <= other.val5 else other.val5
+        self.val6 = self.val6 if self.val6 <= other.val6 else other.val6
+        return self
 """
 -----------------------------------------------------------------
 -----------------------------------------------------------------
@@ -78,6 +152,27 @@ class ProfileData(Structure):
                 ('val5'   , c_uint64),
                 ('val6'   , c_uint64),
                 ('pad2'   , c_uint64)]
+
+    def __add__(self, other):
+        profile_data_math = ProfileDataMath(self.val1, self.val2, self.val3, self.val4, self.val5, self.val6)
+        profile_data_math = profile_data_math + other
+        return profile_data_math
+
+    def __sub__(self, other):
+        profile_data_math = ProfileDataMath(self.val1, self.val2, self.val3, self.val4, self.val5, self.val6)
+        profile_data_math = profile_data_math - other
+        return profile_data_math
+
+    def __truediv__(self, value):
+        profile_data_math = ProfileDataMath(self.val1, self.val2, self.val3, self.val4, self.val5, self.val6)
+        profile_data_math = profile_data_math/value
+        return profile_data_math
+
+    def __mul__(self, other):
+        profile_data_math = ProfileDataMath(self.val1, self.val2, self.val3, self.val4, self.val5, self.val6)
+        profile_data_math = profile_data_math*other
+        return profile_data_math
+
 
 
 """
@@ -106,8 +201,11 @@ class AliveEvents(Structure):
 -----------------------------------------------------------------
 """
 class Metadata(Structure):
-    _fields_ = [('profileId', c_uint32)]
-
+    _fields_ = [('profileId'   , c_uint32),
+                ('perf_typeid' , c_uint32),
+                ('config_count', c_int),
+                ('config_list' , c_uint64 * 6),
+               ]
 
 
 """
@@ -146,3 +244,24 @@ class IntervalEvent(Structure):
         self.end = ProfileData()
         self.overhead = []
 
+
+"""
+-----------------------------------------------------------------
+List of the calibration Results  ------------------------------
+"""
+class CalibrationResults(Structure):
+    def __init__(self):
+        self.max = ProfileDataMath()
+        self.min = ProfileDataMath()
+        self.avg = ProfileDataMath()
+
+"""
+-----------------------------------------------------------------
+List of the calibration Overheads  ------------------------------
+"""
+class CalibrationOverheads(Structure):
+    def __init__(self):
+        self.start_stop         = CalibrationResults()
+        self.stamp              = CalibrationResults()
+        self.nesting_start_stop = CalibrationResults()
+        

@@ -11,7 +11,8 @@ import logging
 from statsstructures import *
 from bcolors import *
 import copy
-
+from calibration import *
+import glob
 
 def pretty_print_profile(profile):
     print('{:<7},{:<6},{},{},{},{},{},{}'.format(OperationFlags.get_str(profile.opFlag), 
@@ -28,21 +29,38 @@ def pretty_print_profile(profile):
 -----------------------------------------------------------------
 -----------------------------------------------------------------
 """                                                                                        
-def pretty_print_all_events_list(a_all_events):
-    for index, event in enumerate(all_events_list):
+def pretty_print_all_events_list(all_events):
+    for index, event in enumerate(all_events):
         if event.end == None:
             logger.critical(bcolors.FAIL+"Missing STOP event for subId " + str(event.begin.subId) + bcolors.ENDC)
         else:
-            print('Key: {:<5}.{:<4} Nesting: {} \n'.format(event.key.subId, event.key.sequence, event.key.nesting), end='')
+            print('SubId: {:<5} Seq:{:<4} Nesting: {} \n'.format(event.key.subId, event.key.sequence, event.key.nesting), end='')
             pretty_print_delta_raw(event.end, event.begin)
+            sum_nest_raw = ProfileDataMath()
+            
             print('\t\tOverheads:')
             if len(event.overhead):
+
+                '''Sum of nested raw deltas'''
+                for index, overhead in enumerate(event.overhead):
+                    if overhead.stop.opFlag != 0:
+                        sum_nest_raw += overhead.stop - overhead.start
+                        
+                print(bcolors.OKBLUE+ "\t\tSUM OF NESTED RAW DELTA" + 6*" " + "({}, {}, {}, {}, {}, {})".format( 
+                                                                                                sum_nest_raw.val1,
+                                                                                                sum_nest_raw.val2,
+                                                                                                sum_nest_raw.val3,
+                                                                                                sum_nest_raw.val4,
+                                                                                                sum_nest_raw.val5,
+                                                                                                sum_nest_raw.val6) + bcolors.ENDC)
+                '''printing all raw deltas'''
                 for index, overhead in enumerate(event.overhead):
                     if overhead.stop.opFlag == 0:
                         logger.warning(bcolors.WARNING + "Missing stop Overhead for " + OperationFlags.get_str(overhead.start.opFlag) + bcolors.ENDC)
                     else:
                         print('\t', end='')
                         pretty_print_delta_raw(overhead.stop, overhead.start)
+                
             else:
                 print(bcolors.OKBLUE+'\t\t\tNONE'+bcolors.ENDC)
 
@@ -54,7 +72,18 @@ def pretty_print_all_events_list(a_all_events):
 -----------------------------------------------------------------
 """                                                                                        
 def pretty_print_metadata(aMetadata):
-    print('ProfileId: {} \n\n'.format(aMetadata.profileId))
+    print('ProfileId: {}\n'
+          'Perf Typeid: {}\n'
+          'Config Count: {}\n'
+          'Config List: {}, {}, {}, {}, {}, {}\n\n'.format(aMetadata.profileId,
+                                                           aMetadata.perf_typeid,
+                                                           aMetadata.config_count,
+                                                           aMetadata.config_list[0],
+                                                           aMetadata.config_list[1],
+                                                           aMetadata.config_list[2],
+                                                           aMetadata.config_list[3],
+                                                           aMetadata.config_list[4],
+                                                           aMetadata.config_list[5]))
 
 """
 -----------------------------------------------------------------
@@ -125,11 +154,12 @@ def increase_sequence(subid):
         localKey = EventKey()
         localKey.subId = subid
         localKey.sequence = sequence
-        listKey_test.append(localKey)
+        listKey_test.append(copy.deepcopy(localKey))
 
     return sequence
 
 def get_current_sequence(subid):
+    global listKey_test
     sequence = 0
     for index, key in enumerate(listKey_test):
         if key.subId == subid:
@@ -148,9 +178,8 @@ def get_current_sequence(subid):
 """
 # alive_event_list has all the events that started and didn't stoped yet
 alive_event_list = []
-all_events_list  = []
 
-def add_overhead_event_in_all_alive_list(profile_event):
+def add_overhead_event_in_all_alive_list(profile_event, all_events_list):
     no_stop_overhead = False
     for index_alive_events, alive_event in reversed(list(enumerate(alive_event_list))):
         for index_all_events, event in enumerate(all_events_list):
@@ -187,20 +216,18 @@ def add_overhead_event_in_all_alive_list(profile_event):
                                 all_events_list[index_all_events].overhead[index_overhead] = copy.deepcopy(overhead)
                             break
                     else:
-                        logger.error(bcolors.FAIL + OperationFlags.get_str(profile_event.opFlag) + " does not have start overhead list of subId " + str(alive_event.key.subId) + bcolors.ENDC)
+                        logger.error(bcolors.FAIL + OperationFlags.get_str(profile_event.opFlag) + "({})".format(profile_event.subId) + " does not have start overhead list of subId " + str(alive_event.key.subId) + bcolors.ENDC)
 #                        pretty_print_profile(profile_event)
 
-
 """
 -----------------------------------------------------------------
 -----------------------------------------------------------------
 """
-def process_profile_event(profile_event):
-    global all_events_list
+def process_profile_event(profile_event, all_events_list):
     global nesting
     #Add the event in all events in the alive_event_list
     
-    add_overhead_event_in_all_alive_list(profile_event)
+    add_overhead_event_in_all_alive_list(profile_event, all_events_list)
 
     #All starts are added in the alive_event_list
     if profile_event.opFlag == OperationFlags.enSTART:
@@ -238,35 +265,126 @@ def process_profile_event(profile_event):
 -----------------------------------------------------------------
 -----------------------------------------------------------------
 """
+def test_summary(filename, metadata, calibration, events_list, mode, factor = 1):
+
+    if mode == "max":
+        calib_start_stop         = calibration.start_stop.max
+        calib_stamp              = calibration.stamp.max
+        calib_nesting_start_stop = calibration.nesting_start_stop.max
+    elif mode == "min":
+        calib_start_stop         = calibration.start_stop.min
+        calib_stamp              = calibration.stamp.min
+        calib_nesting_start_stop = calibration.nesting_start_stop.min
+    elif mode == "avg":
+        calib_start_stop         = calibration.start_stop.avg
+        calib_stamp              = calibration.stamp.avg
+        calib_nesting_start_stop = calibration.nesting_start_stop.avg
+
+    calib_start_stop *= factor
+    calib_stamp      *= factor
+    calib_nesting_start_stop *= factor
+
+    print(bcolors.HEADER + "CALIBRATION VALUES" + bcolors.ENDC)
+    Calibration().pretty_print_calibration_values(calib_start_stop, 1)
+    Calibration().pretty_print_calibration_values(calib_stamp, 2)
+    Calibration().pretty_print_calibration_values(calib_nesting_start_stop, 3)
+
+
+
+    print(bcolors.HEADER + "\nTEST {} SUMMARY OF DELTAS\n".format(os.path.basename(filename)) + bcolors.ENDC)
+    pretty_print_metadata(metadata)
+    for index, event in enumerate(events_list):
+        if event.end == None:
+            logger.critical(bcolors.FAIL+"Missing STOP event for subId " + str(event.begin.subId) + bcolors.ENDC)
+        else:
+            print('SubId: {:<5} Seq: {:<4} Nest: {}'.format(event.key.subId, event.key.sequence, event.key.nesting), end='')
+            clear_profile_value = event.end - event.begin
+
+            #Remove START/STOP
+            clear_profile_value -= calib_start_stop
+
+            if len(event.overhead):
+                for index, overhead in enumerate(event.overhead):
+                    if overhead.stop.opFlag == 0:
+                        logger.warning(bcolors.WARNING + "Missing stop Overhead for " + OperationFlags.get_str(overhead.start.opFlag) + bcolors.ENDC)
+                    else:
+                        if overhead.start.opFlag == OperationFlags.enSTART and \
+                           overhead.stop.opFlag  == OperationFlags.enSTOP:
+                            clear_profile_value -= calib_nesting_start_stop
+                        elif overhead.start.opFlag == OperationFlags.enDISABLE and \
+                             overhead.stop.opFlag  == OperationFlags.enENABLE:
+                             clear_profile_value -= calib_nesting_start_stop + (overhead.stop - overhead.start)
+                        elif overhead.start.opFlag == OperationFlags.enSTAMP and \
+                             overhead.stop.opFlag  == OperationFlags.enSTAMP:
+                             clear_profile_value -= calib_stamp
+                        else:
+                            logger.critical(bcolors.FAIL+"Calibration NOT found for the pair " + str(overhead.start.opFlag) + "/" + str(overhead.stop.opFlag) + bcolors.ENDC)
+            
+            print(bcolors.OKBLUE + '\tADJUSTED VALUES: {}, {}, {}, {}, {}, {}'.format( 
+                                                                clear_profile_value.val1,
+                                                                clear_profile_value.val2,
+                                                                clear_profile_value.val3,
+                                                                clear_profile_value.val4,
+                                                                clear_profile_value.val5,
+                                                                clear_profile_value.val6) + bcolors.ENDC)
+
+"""
+-----------------------------------------------------------------
+-----------------------------------------------------------------
+"""
 def unpack_file(afilename):
-    global all_events_list
-    with open(afilename,'rb') as file:
-        #save output file
-        if outputFile != None:
-            orig_stdout = sys.stdout
-            outFile = open(outputFile, 'w+')
-            sys.stdout = outFile
-    
-        print ('Unpacking %s' %afilename)
+    global nesting
+    global alive_event_list
+    global listKey_test
+    files_list = []
+    calibration_overheads = CalibrationOverheads()
 
-        metadata = Metadata()
-        file.readinto(metadata)
-        pretty_print_metadata(metadata)
+    files_list=[ os.path.realpath(i) for i in glob.glob(afilename+"*")]
+
+    #the calibration file must be the first in alphabetical order
+    for afile in sorted(files_list):
+        all_events_list = []
+        alive_event_list = []
+        listKey_test = []
+        nesting = 0
+
+        with open(afile,'rb') as file:
+            #save output file
+            if outputFile != None:
+                orig_stdout = sys.stdout
+                outFile = open(outputFile, 'w+')
+                sys.stdout = outFile
         
-        profileData = ProfileData()
-        while file.readinto(profileData):
-            list_of_data = struct.unpack("iiLLLLLLL", profileData)
-            list_of_data = list_of_data[:8]
-            logger.debug(list_of_data)
-            process_profile_event(profileData)
-            pretty_print_profile(profileData)
+            print ('Unpacking %s' %afilename)
 
-        if outputFile != None:
-            sys.stdout = orig_stdout
-            outFile.close()
+            metadata = Metadata()
+            file.readinto(metadata)
+            pretty_print_metadata(metadata)
+            
+            profileData = ProfileData()
+            while file.readinto(profileData):
+                list_of_data = struct.unpack("iiLLLLLLL", profileData)
+                list_of_data = list_of_data[:8]
+                logger.debug(list_of_data)
+                process_profile_event(profileData, all_events_list)
+                pretty_print_profile(profileData)
 
-        pretty_print_all_events_list(all_events_list)
+            if outputFile != None:
+                sys.stdout = orig_stdout
+                outFile.close()
 
+            pretty_print_all_events_list(all_events_list)
+
+            #Is it a calibration file?
+            calibration = Calibration()
+            if calibration.is_calibration_file(all_events_list) == True:
+                #parse values for calibration struct
+                logger.debug("Calibration file name {}".format(os.path.basename(afile)))
+                calibration_overheads = calibration.calculate_overheads(calibration.list_calibration_subid_values(all_events_list))
+                calibration.pretty_print_calibration_summary(calibration_overheads)
+            else:
+                #Test file
+                test_summary(afile, metadata, calibration_overheads, all_events_list, "avg", 1)
 """
 -----------------------------------------------------------------
 Logger and output file configuration 
@@ -284,11 +402,7 @@ Do not insert an output file in order to see the output in the
 terminal
 -----------------------------------------------------------------
 """
-if os.path.isdir(filename):
-    flist=[ os.path.basename(i) for i in os.listdir(filename)]
-    for afile in sorted(flist):
-        unpack_file(filename+'/'+afile)
-else:
-    unpack_file(filename)
+    #Directory is not supported since the calibration become activated
+unpack_file(filename)
    
 
