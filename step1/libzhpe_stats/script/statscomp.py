@@ -3,16 +3,15 @@
 import os
 import struct
 import sys
-from ctypes import *
-import statistics
 import enum
 import pprint
 import logging
+import argparse
+import copy
+import glob
 from statsstructures import *
 from bcolors import *
-import copy
 from calibration import *
-import glob
 
 def pretty_print_profile(profile):
     print('{:<7},{:<6},{},{},{},{},{},{}'.format(OperationFlags.get_str(profile.opFlag), 
@@ -210,14 +209,13 @@ def add_overhead_event_in_all_alive_list(profile_event, all_events_list):
                            OperationFlags.does_end_event_match(overhead.start.opFlag, profile_event.opFlag):
                             if overhead.stop.opFlag != 0:
                                 logger.error(bcolors.FAIL + "Stop overwritten for overhead on subId " + str(alive_event.key.subId) + bcolors.ENDC)
-#                                pretty_print_profile(profile_event)
                             else:
                                 overhead.stop = profile_event
                                 all_events_list[index_all_events].overhead[index_overhead] = copy.deepcopy(overhead)
                             break
                     else:
                         logger.error(bcolors.FAIL + OperationFlags.get_str(profile_event.opFlag) + "({})".format(profile_event.subId) + " does not have start overhead list of subId " + str(alive_event.key.subId) + bcolors.ENDC)
-#                        pretty_print_profile(profile_event)
+
 
 """
 -----------------------------------------------------------------
@@ -265,7 +263,7 @@ def process_profile_event(profile_event, all_events_list):
 -----------------------------------------------------------------
 -----------------------------------------------------------------
 """
-def test_summary(filename, metadata, calibration, events_list, mode, factor = 1):
+def test_summary(filename, metadata, calibration, events_list, mode, calib_factor = 1):
 
     if mode == "max":
         calib_start_stop         = calibration.start_stop.max
@@ -280,11 +278,11 @@ def test_summary(filename, metadata, calibration, events_list, mode, factor = 1)
         calib_stamp              = calibration.stamp.avg
         calib_nesting_start_stop = calibration.nesting_start_stop.avg
 
-    calib_start_stop *= factor
-    calib_stamp      *= factor
-    calib_nesting_start_stop *= factor
+    calib_start_stop *= calib_factor
+    calib_stamp      *= calib_factor
+    calib_nesting_start_stop *= calib_factor
 
-    print(bcolors.HEADER + "CALIBRATION VALUES" + bcolors.ENDC)
+    print(bcolors.HEADER + "\nCALIBRATION METHOD: {}, factor = {}".format(mode, calib_factor) + bcolors.ENDC)
     Calibration().pretty_print_calibration_values(calib_start_stop, 1)
     Calibration().pretty_print_calibration_values(calib_stamp, 2)
     Calibration().pretty_print_calibration_values(calib_nesting_start_stop, 3)
@@ -306,7 +304,7 @@ def test_summary(filename, metadata, calibration, events_list, mode, factor = 1)
             if len(event.overhead):
                 for index, overhead in enumerate(event.overhead):
                     if overhead.stop.opFlag == 0:
-                        logger.warning(bcolors.WARNING + "Missing stop Overhead for " + OperationFlags.get_str(overhead.start.opFlag) + bcolors.ENDC)
+                        logger.warning(bcolors.WARNING + "Missing stop overhead for " + OperationFlags.get_str(overhead.start.opFlag) + bcolors.ENDC)
                     else:
                         if overhead.start.opFlag == OperationFlags.enSTART and \
                            overhead.stop.opFlag  == OperationFlags.enSTOP:
@@ -320,7 +318,7 @@ def test_summary(filename, metadata, calibration, events_list, mode, factor = 1)
                         else:
                             logger.critical(bcolors.FAIL+"Calibration NOT found for the pair " + str(overhead.start.opFlag) + "/" + str(overhead.stop.opFlag) + bcolors.ENDC)
             
-            print(bcolors.OKBLUE + '\tADJUSTED VALUES: {}, {}, {}, {}, {}, {}'.format( 
+            print(bcolors.OKBLUE + '\tCALIBRATED DELTAS: {}, {}, {}, {}, {}, {}'.format( 
                                                                 clear_profile_value.val1,
                                                                 clear_profile_value.val2,
                                                                 clear_profile_value.val3,
@@ -332,14 +330,20 @@ def test_summary(filename, metadata, calibration, events_list, mode, factor = 1)
 -----------------------------------------------------------------
 -----------------------------------------------------------------
 """
-def unpack_file(afilename):
+def unpack_file(input_file, output_file, mode, factor):
     global nesting
     global alive_event_list
     global listKey_test
     files_list = []
     calibration_overheads = CalibrationOverheads()
 
-    files_list=[ os.path.realpath(i) for i in glob.glob(afilename+"*")]
+    files_list=[ os.path.realpath(i) for i in glob.glob(input_file+"*")]
+            
+    #save output file
+    if output_file != None:
+        orig_stdout = sys.stdout
+        outFile = open(output_file, 'w+')
+        sys.stdout = outFile
 
     #the calibration file must be the first in alphabetical order
     for afile in sorted(files_list):
@@ -349,13 +353,8 @@ def unpack_file(afilename):
         nesting = 0
 
         with open(afile,'rb') as file:
-            #save output file
-            if outputFile != None:
-                orig_stdout = sys.stdout
-                outFile = open(outputFile, 'w+')
-                sys.stdout = outFile
         
-            print ('Unpacking %s' %afilename)
+            print ('Unpacking %s' %input_file)
 
             metadata = Metadata()
             file.readinto(metadata)
@@ -369,10 +368,6 @@ def unpack_file(afilename):
                 process_profile_event(profileData, all_events_list)
                 pretty_print_profile(profileData)
 
-            if outputFile != None:
-                sys.stdout = orig_stdout
-                outFile.close()
-
             pretty_print_all_events_list(all_events_list)
 
             #Is it a calibration file?
@@ -384,7 +379,18 @@ def unpack_file(afilename):
                 calibration.pretty_print_calibration_summary(calibration_overheads)
             else:
                 #Test file
-                test_summary(afile, metadata, calibration_overheads, all_events_list, "avg", 1)
+                if mode == "all":
+                    test_summary(afile, metadata, calibration_overheads, all_events_list, "max", factor)
+                    test_summary(afile, metadata, calibration_overheads, all_events_list, "min", factor)
+                    test_summary(afile, metadata, calibration_overheads, all_events_list, "avg", factor)
+                else:
+                    test_summary(afile, metadata, calibration_overheads, all_events_list, mode, factor)
+
+                    
+    if output_file != None:
+        sys.stdout = orig_stdout
+        outFile.close()
+
 """
 -----------------------------------------------------------------
 Logger and output file configuration 
@@ -392,17 +398,42 @@ Logger and output file configuration
 """
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-filename = sys.argv[1]
-outputFile = None if len(sys.argv) < 3 else sys.argv[2]
 
-"""
------------------------------------------------------------------
-main: delta.py [inputfile] [outputfile]
-Do not insert an output file in order to see the output in the 
-terminal
------------------------------------------------------------------
-"""
-    #Directory is not supported since the calibration become activated
-unpack_file(filename)
-   
 
+def main():
+
+    parser = argparse.ArgumentParser(description='''Computate the statistics of the input file. ''',
+                                     epilog="")
+    parser.add_argument('-i',
+                        '--input',
+                        default=None,
+                        help="""input file, can be the calibration file, test file """
+                             """or the common name of both to run to calibrate and """
+                             """run the test at the same time.\n"""
+                             """e.g: statscomp.py -i mpi_send_data.12345\n"""
+                             """Collects the statistics for calibration file mpi_send_data.12345.0 """
+                             """and the test file mpi_send_data.12345.1 if both files are in """
+                             """the same path.""")
+    parser.add_argument('-o',
+                        '--output',
+                        default=None,
+                        help="""output file name where the output data will be saved. """
+                             """An empty value will print the output the the CLI.""")
+    parser.add_argument('-m',
+                        '--mode',
+                        choices=["max","min","avg","all"],
+                        default="all",
+                        help="""Selects the calibration group must be used to compute the statistics. """
+                              """An empty value will print all modes""")
+    parser.add_argument('-f',
+                        '--factor',
+                        type=float,
+                        default=1,
+                        help="""Multiplication factor value for the computed calibration""")
+    
+    args = parser.parse_args()
+
+    unpack_file(args.input, args.output, args.mode, args.factor)
+
+if __name__ == "__main__":
+    main()

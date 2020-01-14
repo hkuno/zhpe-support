@@ -3,7 +3,6 @@ import os
 import struct
 import sys
 from ctypes import *
-import logging
 from statsstructures import *
 from bcolors import *
 import copy
@@ -135,13 +134,13 @@ class Calibration(Structure):
         calibration_overheads.start_stop.avg = calibration_list[0].avg
 
         #values collected by subId 2 less start_stop calibration values
-        calibration_overheads.stamp.max = calibration_list[1].max - calibration_list[0].avg
-        calibration_overheads.stamp.min = calibration_list[1].min - calibration_list[0].avg
+        calibration_overheads.stamp.max = calibration_list[1].max - calibration_list[0].min
+        calibration_overheads.stamp.min = calibration_list[1].min - calibration_list[0].max
         calibration_overheads.stamp.avg = calibration_list[1].avg - calibration_list[0].avg
 
         #values collected by subId 3 less start_stop calibration values
-        calibration_overheads.nesting_start_stop.max = calibration_list[2].max - calibration_list[0].avg
-        calibration_overheads.nesting_start_stop.min = calibration_list[2].min - calibration_list[0].avg
+        calibration_overheads.nesting_start_stop.max = calibration_list[2].max - calibration_list[0].min
+        calibration_overheads.nesting_start_stop.min = calibration_list[2].min - calibration_list[0].max
         calibration_overheads.nesting_start_stop.avg = calibration_list[2].avg - calibration_list[0].avg
 
         return calibration_overheads

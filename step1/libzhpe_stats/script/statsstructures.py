@@ -1,11 +1,8 @@
 #!/usr/bin/python3
 
-import os
 import struct
-import sys
 import math
 from ctypes import *
-import numpy as np
 
 
 """
