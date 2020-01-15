@@ -17,29 +17,29 @@ class Record(Structure):
     _fields_ = [
                 ('opflag', c_uint32),
                 ('subid',  c_uint32),
+                ('val0',   c_uint64),
                 ('val1',   c_uint64),
                 ('val2',   c_uint64),
                 ('val3',   c_uint64),
                 ('val4',   c_uint64),
                 ('val5',   c_uint64),
                 ('val6',   c_uint64),
-                ('pad',    c_uint64),
              ]
 
 def printMetadata(m):
-    print('profileid:{}, perf_typeid:{}, val1:rdtscp'.format(m.profileid,m.perf_typeid), end='')
+    print('profileid:{}, perf_typeid:{}, val0:rdtscp'.format(m.profileid,m.perf_typeid), end='')
     for i in range(m.config_count):
-        print(',val{}_config:{}'.format(i+2,hex(m.config_list[i])), end='')
+        print(',val{}_config:{}'.format(i+1,hex(m.config_list[i])), end='')
     print('')
 
 def printRecordHeader():
     print('opflag,subid,val1,val2,val3,val4,val5,val6')
 
 def prettyPrintRecord(aRecord):
-    print('opflag:{}, subid:{}, val1:{},  val2:{}, val3:{}, val4:{}, val5:{}, val6:{}'.format(aRecord.opflag,aRecord.subid,aRecord.val1,aRecord.val2,aRecord.val3,aRecord.val4,aRecord.val5,aRecord.val6))
+    print('opflag:{}, subid:{}, val0:{}, val1:{},  val2:{}, val3:{}, val4:{}, val5:{}, val6:{}'.format(aRecord.opflag,aRecord.subid,aRecord.val1,aRecord.val2,aRecord.val3,aRecord.val4,aRecord.val5,aRecord.val6))
 
 def printRecord(aRecord):
-    print('{},{},{},{},{},{},{},{}'.format(aRecord.opflag,aRecord.subid,aRecord.val1,aRecord.val2,aRecord.val3,aRecord.val4,aRecord.val5,aRecord.val6))
+    print('{},{},{},{},{},{},{},{},{}'.format(aRecord.opflag,aRecord.subid,aRecord.val0,aRecord.val1,aRecord.val2,aRecord.val3,aRecord.val4,aRecord.val5,aRecord.val6))
 
 def printStatsForArray(aName, anArray):
     idx=0
@@ -78,11 +78,13 @@ def unpackfile(afilename):
         printMetadata(m)
         printRecordHeader()
         while file.readinto(x):
+            val0_array.append(x.val0)
             val1_array.append(x.val1)
             val2_array.append(x.val2)
             val3_array.append(x.val3)
             val4_array.append(x.val4)
             val5_array.append(x.val5)
+            val6_array.append(x.val6)
             printRecord(x)
             my_idx= my_idx + 1
 
@@ -93,11 +95,13 @@ def unpackfile(afilename):
 #     printStatsForArray(afilename + " val5", val5_array)
 
 # main
+val0_array=[]
 val1_array=[]
 val2_array=[]
 val3_array=[]
 val4_array=[]
 val5_array=[]
+val6_array=[]
 
 filename = sys.argv[-1]
 

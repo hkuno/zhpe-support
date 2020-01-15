@@ -14,12 +14,16 @@ add_executable(sanitycheck_stats sanitycheck_stats.c)
 set_target_properties(sanitycheck_stats PROPERTIES LINK_FLAGS " -DHAVE_ZHPE_STATS")
 target_link_libraries(
   sanitycheck_stats PUBLIC zhpe_stats zhpeq_util)
-
 install(TARGETS sanitycheck_stats DESTINATION libexec)
+
+add_executable(stat_overheads stat_overheads.c)
+set_target_properties(stat_overheads PROPERTIES LINK_FLAGS " -DHAVE_ZHPE_STATS")
+target_link_libraries(
+  stat_overheads PUBLIC zhpe_stats zhpeq_util)
+install(TARGETS stat_overheads DESTINATION libexec)
 
 add_executable(stat_pthread_spinlock stat_pthread_spinlock.c)
 set_target_properties(stat_pthread_spinlock PROPERTIES LINK_FLAGS " -DHAVE_ZHPE_STATS")
 target_link_libraries(
   stat_pthread_spinlock PUBLIC zhpe_stats zhpeq_util)
-
 install(TARGETS stat_pthread_spinlock DESTINATION libexec)
