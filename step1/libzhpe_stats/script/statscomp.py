@@ -281,6 +281,11 @@ def test_summary(filename, metadata, calibration, events_list, mode, calib_facto
         calib_start_stop         = calibration.start_stop.avg
         calib_stamp              = calibration.stamp.avg
         calib_nesting_start_stop = calibration.nesting_start_stop.avg
+    else:
+        #set no calibration
+        calib_start_stop         = ProfileDataMath()
+        calib_stamp              = ProfileDataMath()
+        calib_nesting_start_stop = ProfileDataMath()
 
     calib_start_stop *= calib_factor
     calib_stamp      *= calib_factor
@@ -330,6 +335,8 @@ def test_summary(filename, metadata, calibration, events_list, mode, calib_facto
                                                                                     clear_profile_value.val4,
                                                                                     clear_profile_value.val5,
                                                                                     clear_profile_value.val6) + bcolors.ENDC)
+    
+    print("") 
 
 """
 -----------------------------------------------------------------
@@ -341,7 +348,7 @@ def unpack_file(input_file, output_file, mode, factor):
     global listKey_test
     files_list = []
     calibration_overheads = CalibrationOverheads()
-
+    is_calibrated = False
     files_list=[ os.path.realpath(i) for i in glob.glob(input_file+"*")]
 
     #the calibration file must be the first in alphabetical order
@@ -391,7 +398,10 @@ def unpack_file(input_file, output_file, mode, factor):
                 logger.debug("Calibration file name {}".format(os.path.basename(afile)))
                 calibration_overheads = calibration.calculate_overheads(calibration.list_calibration_subid_values(all_events_list))
                 calibration.pretty_print_calibration_summary(calibration_overheads)
+                is_calibrated = True
             else:
+                if is_calibrated == False:
+                    mode = "none"
                 #Test file
                 if mode == "all":
                     test_summary(afile, metadata, calibration_overheads, all_events_list, "max", factor)
@@ -403,6 +413,9 @@ def unpack_file(input_file, output_file, mode, factor):
             if output_file != None:
                 sys.stdout = orig_stdout
                 out_adjusted_file.close()
+
+    if files_list == []:
+        print(bcolors.FAIL + "No file found" +bcolors.ENDC)
 
 """
 -----------------------------------------------------------------
@@ -420,6 +433,7 @@ def main():
     parser.add_argument('-i',
                         '--input',
                         default=None,
+                        required=True,
                         help="""Input file, can be the calibration file, test file """
                              """or the common name of both to run to calibrate and """
                              """run the test at the same time.\n"""
