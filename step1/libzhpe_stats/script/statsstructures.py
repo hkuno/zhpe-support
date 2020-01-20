@@ -69,7 +69,8 @@ class OperationFlags(c_uint32):
 
 class ProfileDataMath(Structure):
 
-    def __init__(self, val1=0, val2=0, val3=0, val4=0, val5=0, val6=0):
+    def __init__(self, val0=0, val1=0, val2=0, val3=0, val4=0, val5=0, val6=0):
+        self.val0 = val0
         self.val1 = val1
         self.val2 = val2
         self.val3 = val3
@@ -79,6 +80,7 @@ class ProfileDataMath(Structure):
 
     def __add__(self, other):
         profile_data = ProfileDataMath()
+        profile_data.val0 = self.val0 + other.val0
         profile_data.val1 = self.val1 + other.val1
         profile_data.val2 = self.val2 + other.val2
         profile_data.val3 = self.val3 + other.val3
@@ -89,6 +91,7 @@ class ProfileDataMath(Structure):
 
     def __sub__(self, other):
         profile_data = ProfileDataMath()
+        profile_data.val0 = self.val0 - other.val0
         profile_data.val1 = self.val1 - other.val1
         profile_data.val2 = self.val2 - other.val2
         profile_data.val3 = self.val3 - other.val3
@@ -99,6 +102,7 @@ class ProfileDataMath(Structure):
 
     def __truediv__(self, value):
         profile_data = ProfileDataMath()
+        profile_data.val0 = math.ceil(self.val0/value)
         profile_data.val1 = math.ceil(self.val1/value)
         profile_data.val2 = math.ceil(self.val2/value)
         profile_data.val3 = math.ceil(self.val3/value)
@@ -109,6 +113,7 @@ class ProfileDataMath(Structure):
 
     def __mul__(self, other):
         profile_data = ProfileDataMath()
+        profile_data.val0 = math.ceil(self.val0*other)
         profile_data.val1 = math.ceil(self.val1*other)
         profile_data.val2 = math.ceil(self.val2*other)
         profile_data.val3 = math.ceil(self.val3*other)
@@ -118,6 +123,7 @@ class ProfileDataMath(Structure):
         return profile_data
 
     def get_higher(self, other):
+        self.val0 = self.val0 if self.val0 >= other.val0 else other.val0
         self.val1 = self.val1 if self.val1 >= other.val1 else other.val1
         self.val2 = self.val2 if self.val2 >= other.val2 else other.val2
         self.val3 = self.val3 if self.val3 >= other.val3 else other.val3
@@ -127,6 +133,7 @@ class ProfileDataMath(Structure):
         return self
 
     def get_lower(self, other):
+        self.val0 = self.val0 if self.val0 <= other.val0 else other.val0
         self.val1 = self.val1 if self.val1 <= other.val1 else other.val1
         self.val2 = self.val2 if self.val2 <= other.val2 else other.val2
         self.val3 = self.val3 if self.val3 <= other.val3 else other.val3
@@ -142,31 +149,31 @@ class ProfileData(Structure):
     _pack_   = 1
     _fields_ = [('opFlag' , c_uint32),
                 ('subId'  , c_uint32),
+                ('val0'   , c_uint64),
                 ('val1'   , c_uint64),
                 ('val2'   , c_uint64),
                 ('val3'   , c_uint64),
                 ('val4'   , c_uint64),
                 ('val5'   , c_uint64),
-                ('val6'   , c_uint64),
-                ('pad2'   , c_uint64)]
+                ('val6'   , c_uint64)]
 
     def __add__(self, other):
-        profile_data_math = ProfileDataMath(self.val1, self.val2, self.val3, self.val4, self.val5, self.val6)
+        profile_data_math = ProfileDataMath(self.val0, self.val1, self.val2, self.val3, self.val4, self.val5, self.val6)
         profile_data_math = profile_data_math + other
         return profile_data_math
 
     def __sub__(self, other):
-        profile_data_math = ProfileDataMath(self.val1, self.val2, self.val3, self.val4, self.val5, self.val6)
+        profile_data_math = ProfileDataMath(self.val0, self.val1, self.val2, self.val3, self.val4, self.val5, self.val6)
         profile_data_math = profile_data_math - other
         return profile_data_math
 
     def __truediv__(self, value):
-        profile_data_math = ProfileDataMath(self.val1, self.val2, self.val3, self.val4, self.val5, self.val6)
+        profile_data_math = ProfileDataMath(self.val0, self.val1, self.val2, self.val3, self.val4, self.val5, self.val6)
         profile_data_math = profile_data_math/value
         return profile_data_math
 
     def __mul__(self, other):
-        profile_data_math = ProfileDataMath(self.val1, self.val2, self.val3, self.val4, self.val5, self.val6)
+        profile_data_math = ProfileDataMath(self.val0, self.val1, self.val2, self.val3, self.val4, self.val5, self.val6)
         profile_data_math = profile_data_math*other
         return profile_data_math
 

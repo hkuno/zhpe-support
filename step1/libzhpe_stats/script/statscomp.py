@@ -14,14 +14,15 @@ from bcolors import *
 from calibration import *
 
 def pretty_print_profile(profile):
-    print('{:<7},{:<6},{},{},{},{},{},{}'.format(OperationFlags.get_str(profile.opFlag), 
-                                                                   profile.subId,
-                                                                   profile.val1,
-                                                                   profile.val2,
-                                                                   profile.val3,
-                                                                   profile.val4,
-                                                                   profile.val5,
-                                                                   profile.val6))
+    print('{:<7},{:<6},{},{},{},{},{},{},{}'.format(OperationFlags.get_str(profile.opFlag), 
+                                                    profile.subId,
+                                                    profile.val0,
+                                                    profile.val1,
+                                                    profile.val2,
+                                                    profile.val3,
+                                                    profile.val4,
+                                                    profile.val5,
+                                                    profile.val6))
 
 
 """
@@ -45,13 +46,14 @@ def pretty_print_all_events_list(all_events):
                     if overhead.stop.opFlag != 0:
                         sum_nest_raw += overhead.stop - overhead.start
                         
-                print(bcolors.OKBLUE+ "\t\tSUM OF NESTED RAW DELTA" + 6*" " + "({}, {}, {}, {}, {}, {})".format( 
-                                                                                                sum_nest_raw.val1,
-                                                                                                sum_nest_raw.val2,
-                                                                                                sum_nest_raw.val3,
-                                                                                                sum_nest_raw.val4,
-                                                                                                sum_nest_raw.val5,
-                                                                                                sum_nest_raw.val6) + bcolors.ENDC)
+                print(bcolors.OKBLUE+ "\t\tSUM OF NESTED RAW DELTA" + 6*" " + "({}, {}, {}, {}, {}, {}, {})".format( 
+                                                                                                                    sum_nest_raw.val0,
+                                                                                                                    sum_nest_raw.val1,
+                                                                                                                    sum_nest_raw.val2,
+                                                                                                                    sum_nest_raw.val3,
+                                                                                                                    sum_nest_raw.val4,
+                                                                                                                    sum_nest_raw.val5,
+                                                                                                                    sum_nest_raw.val6) + bcolors.ENDC)
                 '''printing all raw deltas'''
                 for index, overhead in enumerate(event.overhead):
                     if overhead.stop.opFlag == 0:
@@ -89,15 +91,16 @@ def pretty_print_metadata(aMetadata):
 -----------------------------------------------------------------
 """
 def pretty_print_event(aAliveEvent, aProfile, aListAliveEvents):
-    print('{:<7},{:<6},{},{},{},{},{},{}   Nesting: {}'.format( OperationFlags.get_str(aProfile.opFlag), 
-                                                                aProfile.subId,
-                                                                aProfile.val1,
-                                                                aProfile.val2,
-                                                                aProfile.val3,
-                                                                aProfile.val4,
-                                                                aProfile.val5,
-                                                                aProfile.val6,
-                                                                aAliveEvent.nesting ), end= ' ')
+    print('{:<7},{:<6},{},{},{},{},{},{},{}   Nesting: {}'.format( OperationFlags.get_str(aProfile.opFlag), 
+                                                                    aProfile.subId,
+                                                                    aProfile.val0,
+                                                                    aProfile.val1,
+                                                                    aProfile.val2,
+                                                                    aProfile.val3,
+                                                                    aProfile.val4,
+                                                                    aProfile.val5,
+                                                                    aProfile.val6,
+                                                                    aAliveEvent.nesting ), end= ' ')
     print( '[', end='')
     event = None
     for index, event in enumerate(aListAliveEvents):
@@ -117,9 +120,10 @@ def pretty_print_event(aAliveEvent, aProfile, aListAliveEvents):
 Prints the STOP-START value 
 """
 def pretty_print_delta_raw(eventstop, eventstart):
-    print(bcolors.OKBLUE+"\tDELTA RAW[{:<6}] [{:7} > {:6}] ({}, {}, {}, {}, {}, {})".format(eventstop.subId,
+    print(bcolors.OKBLUE+"\tDELTA RAW[{:<6}] [{:7} > {:6}] ({}, {}, {}, {}, {}, {}, {})".format(eventstop.subId,
                                                                             OperationFlags.get_str(eventstart.opFlag),
                                                                             OperationFlags.get_str(eventstop.opFlag),
+                                                                            eventstop.val0 - eventstart.val0,
                                                                             eventstop.val1 - eventstart.val1,
                                                                             eventstop.val2 - eventstart.val2,
                                                                             eventstop.val3 - eventstart.val3,
@@ -318,13 +322,14 @@ def test_summary(filename, metadata, calibration, events_list, mode, calib_facto
                         else:
                             logger.critical(bcolors.FAIL+"Calibration NOT found for the pair " + str(overhead.start.opFlag) + "/" + str(overhead.stop.opFlag) + bcolors.ENDC)
             
-            print(bcolors.OKBLUE + '\tCALIBRATED DELTAS: {}, {}, {}, {}, {}, {}'.format( 
-                                                                clear_profile_value.val1,
-                                                                clear_profile_value.val2,
-                                                                clear_profile_value.val3,
-                                                                clear_profile_value.val4,
-                                                                clear_profile_value.val5,
-                                                                clear_profile_value.val6) + bcolors.ENDC)
+            print(bcolors.OKBLUE + '\tCALIBRATED DELTAS: {}, {}, {}, {}, {}, {}, {}'.format( 
+                                                                                    clear_profile_value.val0,
+                                                                                    clear_profile_value.val1,
+                                                                                    clear_profile_value.val2,
+                                                                                    clear_profile_value.val3,
+                                                                                    clear_profile_value.val4,
+                                                                                    clear_profile_value.val5,
+                                                                                    clear_profile_value.val6) + bcolors.ENDC)
 
 """
 -----------------------------------------------------------------
@@ -338,12 +343,6 @@ def unpack_file(input_file, output_file, mode, factor):
     calibration_overheads = CalibrationOverheads()
 
     files_list=[ os.path.realpath(i) for i in glob.glob(input_file+"*")]
-            
-    #save output file
-    if output_file != None:
-        orig_stdout = sys.stdout
-        outFile = open(output_file, 'w+')
-        sys.stdout = outFile
 
     #the calibration file must be the first in alphabetical order
     for afile in sorted(files_list):
@@ -352,6 +351,14 @@ def unpack_file(input_file, output_file, mode, factor):
         listKey_test = []
         nesting = 0
 
+        #save output file
+        if output_file != None:
+            orig_stdout = sys.stdout
+            out_unpack_file    = open(output_file + os.path.basename(afile) + ".unpacked", 'w+')
+            out_raw_delta_file = open(output_file + os.path.basename(afile) + ".rawdelta", 'w+')
+            out_adjusted_file  = open(output_file + os.path.basename(afile) + ".adjusted", 'w+')
+            sys.stdout = out_unpack_file
+            
         with open(afile,'rb') as file:
         
             print ('Unpacking %s' %input_file)
@@ -363,13 +370,20 @@ def unpack_file(input_file, output_file, mode, factor):
             profileData = ProfileData()
             while file.readinto(profileData):
                 list_of_data = struct.unpack("iiLLLLLLL", profileData)
-                list_of_data = list_of_data[:8]
                 logger.debug(list_of_data)
                 process_profile_event(profileData, all_events_list)
                 pretty_print_profile(profileData)
 
+            if output_file != None:
+                sys.stdout = out_raw_delta_file
+                out_unpack_file.close()
+                
             pretty_print_all_events_list(all_events_list)
 
+            if output_file != None:
+                sys.stdout = out_adjusted_file
+                out_raw_delta_file.close()
+                
             #Is it a calibration file?
             calibration = Calibration()
             if calibration.is_calibration_file(all_events_list) == True:
@@ -385,11 +399,10 @@ def unpack_file(input_file, output_file, mode, factor):
                     test_summary(afile, metadata, calibration_overheads, all_events_list, "avg", factor)
                 else:
                     test_summary(afile, metadata, calibration_overheads, all_events_list, mode, factor)
-
-                    
-    if output_file != None:
-        sys.stdout = orig_stdout
-        outFile.close()
+            
+            if output_file != None:
+                sys.stdout = orig_stdout
+                out_adjusted_file.close()
 
 """
 -----------------------------------------------------------------
@@ -407,7 +420,7 @@ def main():
     parser.add_argument('-i',
                         '--input',
                         default=None,
-                        help="""input file, can be the calibration file, test file """
+                        help="""Input file, can be the calibration file, test file """
                              """or the common name of both to run to calibrate and """
                              """run the test at the same time.\n"""
                              """e.g: statscomp.py -i mpi_send_data.12345\n"""
@@ -417,7 +430,9 @@ def main():
     parser.add_argument('-o',
                         '--output',
                         default=None,
-                        help="""output file name where the output data will be saved. """
+                        help="""Output address where the output data will be saved. The output file """
+                             """will be concatenated with the input file name plus '.unpacked', """
+                             """'.rawdelta' or '.adjusted' depending the file content."""
                              """An empty value will print the output the the CLI.""")
     parser.add_argument('-m',
                         '--mode',

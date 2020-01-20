@@ -14,21 +14,24 @@ class Calibration(Structure):
                                   3: "NESTING START>STOP"}
 
     def pretty_print_profile(self, profile):
-        print('{:<4},{:<4},{:<4},{:<4},{:<4},{:<4}'.format( profile.val1,
-                                                            profile.val2,
-                                                            profile.val3,
-                                                            profile.val4,
-                                                            profile.val5,
-                                                            profile.val6))
+        print('{:<4},{:<4},{:<4},{:<4},{:<4},{:<4},{:<4}'.format( profile.val0,
+                                                                  profile.val1,
+                                                                  profile.val2,
+                                                                  profile.val3,
+                                                                  profile.val4,
+                                                                  profile.val5,
+                                                                  profile.val6))
 
     def pretty_print_calibration_values(self,profile, calibrationindex):
         print('{}'
+              '\n\tval0:{}'
               '\n\tval1:{}'
               '\n\tval2:{}'
               '\n\tval3:{}'
               '\n\tval4:{}'
               '\n\tval5:{}'
               '\n\tval6:{}\n'.format( Calibration.calibration_subid_meanings[calibrationindex],
+                                      profile.val0,
                                       profile.val1,
                                       profile.val2,
                                       profile.val3,
@@ -38,12 +41,14 @@ class Calibration(Structure):
 
     def pretty_print_calibration_overhead(self, calibration_result):
         print(bcolors.OKBLUE+
-              'val1\t\t{}\t{}\t{}'
+              'val0\t\t{}\t{}\t{}'
+              '\nval1\t\t{}\t{}\t{}'
               '\nval2\t\t{}\t{}\t{}'
               '\nval3\t\t{}\t{}\t{}'
               '\nval4\t\t{}\t{}\t{}'
               '\nval5\t\t{}\t{}\t{}'
               '\nval6\t\t{}\t{}\t{}\n'.format(
+                                      calibration_result.max.val0, calibration_result.min.val0, calibration_result.avg.val0,
                                       calibration_result.max.val1, calibration_result.min.val1, calibration_result.avg.val1,
                                       calibration_result.max.val2, calibration_result.min.val2, calibration_result.avg.val2,
                                       calibration_result.max.val3, calibration_result.min.val3, calibration_result.avg.val3,
