@@ -44,7 +44,7 @@ def pretty_print_all_events_list(all_events):
                 '''Sum of nested raw deltas'''
                 for index, overhead in enumerate(event.overhead):
                     if overhead.stop.opFlag != 0:
-                        sum_nest_raw += overhead.stop - overhead.start
+                        sum_nest_raw += overhead.start.abs_distance(overhead.stop)
                         
                 print(bcolors.OKBLUE+ "\t\tSUM OF NESTED RAW DELTA" + 6*" " + "({}, {}, {}, {}, {}, {}, {})".format( 
                                                                                                                     sum_nest_raw.val0,
@@ -120,16 +120,18 @@ def pretty_print_event(aAliveEvent, aProfile, aListAliveEvents):
 Prints the STOP-START value 
 """
 def pretty_print_delta_raw(eventstop, eventstart):
+    event_abs_delta = eventstart.abs_distance(eventstop)
+
     print(bcolors.OKBLUE+"\tDELTA RAW[{:<6}] [{:7} > {:6}] ({}, {}, {}, {}, {}, {}, {})".format(eventstop.subId,
                                                                             OperationFlags.get_str(eventstart.opFlag),
                                                                             OperationFlags.get_str(eventstop.opFlag),
-                                                                            eventstop.val0 - eventstart.val0,
-                                                                            eventstop.val1 - eventstart.val1,
-                                                                            eventstop.val2 - eventstart.val2,
-                                                                            eventstop.val3 - eventstart.val3,
-                                                                            eventstop.val4 - eventstart.val4,
-                                                                            eventstop.val5 - eventstart.val5,
-                                                                            eventstop.val6 - eventstart.val6,) + bcolors.ENDC)
+                                                                            event_abs_delta.val0,
+                                                                            event_abs_delta.val1,
+                                                                            event_abs_delta.val2,
+                                                                            event_abs_delta.val3,
+                                                                            event_abs_delta.val4,
+                                                                            event_abs_delta.val5,
+                                                                            event_abs_delta.val6) + bcolors.ENDC)
 
 
 """
@@ -233,7 +235,6 @@ def process_profile_event(profile_event, all_events_list):
 
     #All starts are added in the alive_event_list
     if profile_event.opFlag == OperationFlags.enSTART:
-        #event_record = IntervalEvent(EventKey(), ProfileData(), ProfileData(), OverheadInterval())
         event_record = IntervalEvent()
         event_record.key.subId = profile_event.subId
         event_record.key.nesting = nesting
@@ -305,7 +306,7 @@ def test_summary(filename, metadata, calibration, events_list, mode, calib_facto
             logger.critical(bcolors.FAIL+"Missing STOP event for subId " + str(event.begin.subId) + bcolors.ENDC)
         else:
             print('SubId: {:<5} Seq: {:<4} Nest: {}'.format(event.key.subId, event.key.sequence, event.key.nesting), end='')
-            clear_profile_value = event.end - event.begin
+            clear_profile_value = event.begin.abs_distance(event.end)
 
             #Remove START/STOP
             clear_profile_value -= calib_start_stop
@@ -320,7 +321,7 @@ def test_summary(filename, metadata, calibration, events_list, mode, calib_facto
                             clear_profile_value -= calib_nesting_start_stop
                         elif overhead.start.opFlag == OperationFlags.enDISABLE and \
                              overhead.stop.opFlag  == OperationFlags.enENABLE:
-                             clear_profile_value -= calib_nesting_start_stop + (overhead.stop - overhead.start)
+                             clear_profile_value -= calib_nesting_start_stop + (overhead.start.abs_distance(overhead.stop))
                         elif overhead.start.opFlag == OperationFlags.enSTAMP and \
                              overhead.stop.opFlag  == OperationFlags.enSTAMP:
                              clear_profile_value -= calib_stamp
@@ -368,7 +369,7 @@ def unpack_file(input_file, output_file, mode, factor):
             
         with open(afile,'rb') as file:
         
-            print ('Unpacking %s' %input_file)
+            print ('Unpacking %s' %afile)
 
             metadata = Metadata()
             file.readinto(metadata)
