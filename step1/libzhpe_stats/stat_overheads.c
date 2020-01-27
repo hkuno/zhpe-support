@@ -137,7 +137,7 @@ do {            \
 #define S_STAMP_S1    \
 do {            \
     zhpe_stats_start(ZHPE_STATS_SUBID_S_STAMP_S);      \
-    zhpe_stats_stamp(89888786, 89, 88, 87, 86);       \
+    zhpe_stats_stamp(89888786, 89, 88, 87, 86, 0, 0);       \
     zhpe_stats_stop(ZHPE_STATS_SUBID_S_STAMP_S);      \
 } while (0)
 
@@ -312,12 +312,12 @@ int main(int argc, char **argv)
     zhpe_stats_open(0);
 //    SS1000;
 
-    S_STAMP_S1000;
-
     S_STARTSTOP_S1000;
 
     SS_STARTSTOP_SS1000;
     zhpe_stats_close();
+
+    S_STAMP_S1000;
 
     zhpe_stats_finalize();
 

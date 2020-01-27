@@ -237,11 +237,7 @@ int main(int argc, char **argv)
 #endif
 
     /* sanity check stamp */
-    zhpe_stats_stamp(1, 1);
-    zhpe_stats_stamp(99, 99);
-    zhpe_stats_stamp(9998, 99, 98);
-    zhpe_stats_stamp(999897, 99, 98, 97);
-    zhpe_stats_stamp(89888786, 89, 88, 87, 86);
+    zhpe_stats_stamp(123456, 1, 2, 3, 4, 5, 6);
     zhpe_stats_stop_all();
     zhpe_stats_close();
     zhpe_stats_finalize();

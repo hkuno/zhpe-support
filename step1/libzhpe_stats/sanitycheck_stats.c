@@ -142,8 +142,6 @@ int main(int argc, char **argv)
     zhpe_stats_stop_all();
     zhpe_stats_close();
 
-    zhpe_stats_test(0);
-
     zhpe_stats_finalize();
 
     ret = 0;

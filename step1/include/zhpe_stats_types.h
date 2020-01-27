@@ -52,24 +52,36 @@ struct zhpe_stats_metadata {
     uint64_t    config_list[6];
 };
 
-
 enum {
-
+/* cpu group */
 /* magic raw counters from John */
-    L1_RESULT_ACCESS                                = 0x40,
-    L1_RESULT_MISS                                  = 0xc860,
-    DISPATCH_RESOURCE_STALL_CYCLES                  = 0xaf | ((0x8) << 8),
+    DISPATCH_RESOURCE_STALL_CYCLES0                 = 0xAF,
+    DISPATCH_RESOURCE_STALL_CYCLES1                 = 0xAE,
+    RAW_PERF_COUNT_HW_RETIRED_INSTRUCTIONS          = 0xC0,
+    RAW_PERF_COUNT_HW_CPU_CYCLES                    = 0x76,
+    RAW_PERF_COUNT_HW_RETIRED_BRANCH_INSTRUCTIONS   = 0xC2,
+    RAW_PERF_COUNT_HW_BRANCH_MISSES                 = 0xC3,
 
+/* DC cache group */
 /* raw counters from PPR for AMD Family 17h Model 31h B0 */
     ALL_DC_ACCESSES                                 = 0x430729,
+    L2_CACHE_MISS_FROM_DC_MISS                      = 0x430864,
+    L2_CACHE_HIT_FROM_DC_MISS                       = 0x437064,
+    L2_CACHE_MISS_FROM_L2_HWPF1                     = 0x431F71,
+    L2_CACHE_MISS_FROM_L2_HWPF2                     = 0x431F72,
+    L2_CACHE_HIT_FROM_L2_HWPF                       = 0x431F70,
 
+/* IC cache group (for later) */
     ALL_L2_CACHE_ACCESSES1                          = 0x43F960,
     ALL_L2_CACHE_ACCESSES2                          = 0x431F70,
     ALL_L2_CACHE_ACCESSES3                          = 0x431F71,
     ALL_L2_CACHE_ACCESSES4                          = 0x431F72,
 
-    L2_CACHE_ACCESS_FROM_IC_MISS_INCLUDING_PREFETCH = 0x431060,
+/* other */
     L2_CACHE_ACCESS_FROM_DC_MISS_INCLUDING_PREFETCH = 0x43C860,
+    L2_CACHE_ACCESS_FROM_IC_MISS_INCLUDING_PREFETCH = 0x431060,
+    L1_DTLB_MISSES                                  = 0x43FF45,
+    L2_DTLB_MISSES_AND_PAGE_WALK                    = 0x43FF45,
 
     L2_CACHE_ACCESS_FROM_L2_HWPF1                   = 0x431F70,
     L2_CACHE_ACCESS_FROM_L2_HWPF2                   = 0x431F71,
@@ -79,31 +91,11 @@ enum {
     ALL_L2_CACHE_MISSES2                            = 0x431F71,
     ALL_L2_CACHE_MISSES3                            = 0x431F72,
 
+    L2_CACHE_HIT_FROM_IC_MISS                       = 0x430664,
     L2_CACHE_MISS_FROM_IC_MISS                      = 0x430164,
-
-    L2_CACHE_MISS_FROM_DC_MISS                      = 0x430864,
-
-    L2_CACHE_MISS_FROM_L2_HWPF1                     = 0x431F71,
-    L2_CACHE_MISS_FROM_L2_HWPF2                     = 0x431F72,
 
     ALL_L2_CACHE_HITS1                              = 0x43F664,
     ALL_L2_CACHE_HITS2                              = 0x431F70,
-
-    L2_CACHE_HIT_FROM_IC_MISS                       = 0x430664,
-
-    L2_CACHE_HIT_FROM_DC_MISS                       = 0x437064,
-
-    L2_CACHE_HIT_FROM_L2_HWPF                       = 0x431F70,
-
-    L1_DTLB_MISSES                                  = 0x43FF45,
-    L2_DTLB_MISSES_AND_PAGE_WALK                    = 0x43FF45,
-
-    L1_DC_READ_MISS                                 = (PERF_COUNT_HW_CACHE_L1D) | (PERF_COUNT_HW_CACHE_OP_READ  << 8) | (PERF_COUNT_HW_CACHE_RESULT_MISS << 16),
-
-    L1_DC_WRITE_MISS                                = (PERF_COUNT_HW_CACHE_L1D) | (PERF_COUNT_HW_CACHE_OP_WRITE  << 8) | (PERF_COUNT_HW_CACHE_RESULT_MISS << 16),
-
-    L1_DC_PREFETCH_MISS                             = (PERF_COUNT_HW_CACHE_L1D) | (PERF_COUNT_HW_CACHE_OP_PREFETCH  << 8) | (PERF_COUNT_HW_CACHE_RESULT_MISS << 16),
-
 };
 
 struct zhpe_stats_record {
@@ -119,19 +111,18 @@ struct zhpe_stats_record {
 } CACHE_ALIGNED;
 
 struct zhpe_stats_ops {
-    struct zhpe_stats           *(*open)(uint16_t uid);
-    void                        (*close)(void);
-    struct zhpe_stats           *(*get_zhpe_stats)(void);
-    void                        (*stop_all)(struct zhpe_stats *stats);
-    void                        (*start)(struct zhpe_stats *stats, uint32_t subid);
-    void                        (*stop)(struct zhpe_stats *stats, uint32_t subid);
-    void                        (*finalize)(void);
-    void                        (*key_destructor)(void *vstats);
-    void                        (*stamp)(struct zhpe_stats *stats, uint32_t subid,
-                                         uint32_t items, uint64_t *data);
-    void                        (*setvals)(struct zhpe_stats_record *rec);
-    struct zhpe_stats_record    *(*nextslot)(struct zhpe_stats *stats);
-    void                        (*saveme)(char *dest, char *src);
+    void                   (*open)(uint16_t uid);
+    void                   (*close)(void);
+    struct zhpe_stats      *(*get_zhpe_stats)(void);
+    void                   (*stop_all)();
+    void                   (*start)(uint32_t subid);
+    void                   (*stop)(uint32_t subid);
+    void                   (*finalize)(void);
+    void                   (*key_destructor)(void *vstats);
+    void                   (*stamp)(uint32_t subid, uint64_t d1, uint64_t d2, uint64_t d3, uint64_t d4, uint64_t d5, uint64_t d6);
+    void                   (*setvals)(struct zhpe_stats_record *rec);
+    struct zhpe_stats_record    *(*nextslot)();
+    void                   (*saveme)(char *dest, char *src);
 };
 
 /* Ultimately these should be moved to other repos. */
@@ -170,11 +161,12 @@ enum {
 };
 
 enum {
-    ZHPE_STATS_CARBON       = 100,
-    ZHPE_STATS_RDTSCP       = 1000,
-    ZHPE_STATS_CPU          = 2000,
-    ZHPE_STATS_L1_DC        = 3000,
-    ZHPE_STATS_L2_DC        = 4000,
+    ZHPE_STATS_CACHE        = 100,
+    ZHPE_STATS_CACHE_ALT    = 101,
+    ZHPE_STATS_CARBON       = 200,
+    ZHPE_STATS_CPU          = 300,
+    ZHPE_STATS_DISABLED     = 400,
+    ZHPE_STATS_RDTSCP       = 500,
 };
 
 _EXTERN_C_END

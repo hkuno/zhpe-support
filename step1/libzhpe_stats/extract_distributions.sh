@@ -19,7 +19,7 @@ do
     echo "processing subid $s"
     for (( i=0;i<=6;i++ ))
     do
-        grep -e "2,${s}" ${INPUT} | awk -F, '{printf"%d\n",$'$(( i + 3 ))'}' |\
+        grep -e "2,${s}," ${INPUT} | awk -F, '{printf"%d\n",$'$(( i + 3 ))'}' |\
             sort -n | uniq -c > ${OUTPUTDIR}/$fname.subid${s}.val${i}.dist.dat
     done
 done

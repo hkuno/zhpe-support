@@ -44,7 +44,7 @@ _EXTERN_C_BEG
 
 #ifdef HAVE_ZHPE_STATS
 
-extern struct zhpe_stats_ops *zhpe_stats_ops;
+extern __thread struct zhpe_stats_ops *zhpe_stats_ops;
 bool zhpe_stats_init(const char *stats_dir, const char *stats_unique);
 void zhpe_stats_test(uint16_t uid);
 void zhpe_stats_test_saveme(uint32_t opflag, uint32_t subid);
@@ -54,9 +54,9 @@ static inline void zhpe_stats_finalize(void)
     zhpe_stats_ops->finalize();
 }
 
-static inline struct zhpe_stats *zhpe_stats_open(uint16_t uid)
+static inline void zhpe_stats_open(uint16_t uid)
 {
-    return zhpe_stats_ops->open(uid);
+    zhpe_stats_ops->open(uid);
 }
 
 static inline void zhpe_stats_close(void)
@@ -66,40 +66,29 @@ static inline void zhpe_stats_close(void)
 
 static inline void zhpe_stats_stop_all(void)
 {
-    struct zhpe_stats   *stats;
-
-    if (likely(stats = zhpe_stats_ops->get_zhpe_stats()))
-        zhpe_stats_ops->stop_all(stats);
+    zhpe_stats_ops->stop_all();
 }
 
 static inline void zhpe_stats_start(uint32_t subid)
 {
-    struct zhpe_stats   *stats;
-
-    if (likely(stats = zhpe_stats_ops->get_zhpe_stats()))
-        zhpe_stats_ops->start(stats, subid);
+    zhpe_stats_ops->start(subid);
 }
 
 static inline void zhpe_stats_stop(uint32_t subid)
 {
-    struct zhpe_stats   *stats;
-
-    if (likely(stats = zhpe_stats_ops->get_zhpe_stats()))
-        zhpe_stats_ops->stop(stats, subid);
+    zhpe_stats_ops->stop(subid);
 }
 
-#define zhpe_stats_stamp(_subid, ...)                                   \
-do {                                                                    \
-    struct zhpe_stats   *stats;                                         \
-                                                                        \
-    if (likely(stats = zhpe_stats_ops->get_zhpe_stats())) {                    \
-        uint64_t        data[] = { __VA_ARGS__ };                       \
-                                                                        \
-        assert(sizeof(data)/sizeof(uint64_t) <= 4);                     \
-        zhpe_stats_ops->stamp(stats, _subid,                            \
-                             sizeof(data) / sizeof(uint64_t), data);    \
-    }                                                                   \
-} while(0)
+static inline void zhpe_stats_stamp(uint32_t subid,
+                                    uint64_t d1,
+                                    uint64_t d2,
+                                    uint64_t d3,
+                                    uint64_t d4,
+                                    uint64_t d5,
+                                    uint64_t d6)
+{
+    zhpe_stats_ops->stamp(subid, d1, d2, d3, d4, d5, d6);
+}
 
 
 #define zhpe_stats_subid(_name, _id)            \
