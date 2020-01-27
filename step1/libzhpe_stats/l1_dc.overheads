@@ -1,0 +1,33 @@
+average basic start/stop costs: avg val0: 254.242105 avg val1: 0.000526 avg val2: 0.000526 avg val3: 0.000000 avg val4: 0.000000 avg val5: 0.000000 avg val6: 0.000000
+average raw stamp costs: avg val0: 473.093093 avg val1: 0.046046 avg val2: 0.046046 avg val3: 0.000000 avg val4: 0.000000 avg val5: 0.000000 avg val6: 0.000000
+
+average raw start-stop costs: avg val0: 762.610526 avg val1: 0.031053 avg val2: 0.031053 avg val3: 0.000000 avg val4: 0.000000 avg val5: 0.000000 avg val6: 0.000000
+
+BASIC_V0: 254.242105
+STAMP_V0: 218.850988
+STARTSTOP_V0: 508.368421
+
+BASIC_V1: 0.000526
+STAMP_V1: .045520
+STARTSTOP_V1: .030527
+
+BASIC_V2: 0.000526
+STAMP_V2: .045520
+STARTSTOP_V2: .030527
+
+BASIC_V3: 0.000000
+STAMP_V3: 0
+STARTSTOP_V3: 0
+
+BASIC_V4: 0.000000
+STAMP_V4: 0
+STARTSTOP_V4: 0
+
+BASIC_V5: 0.000000
+STAMP_V5: 0
+STARTSTOP_V5: 0
+
+BASIC_V6: 0.000000
+STAMP_V6: 0
+STARTSTOP_V6: 0
+

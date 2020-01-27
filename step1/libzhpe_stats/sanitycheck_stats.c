@@ -108,7 +108,6 @@ int main(int argc, char **argv)
     }
 
     zhpe_stats_open(8);
-    zhpe_stats_enable();
 
     zhpe_stats_start(ZHPE_STATS_SUBID_S_DCA_S);
     A[0]=1;

@@ -121,15 +121,10 @@ struct zhpe_stats_record {
 struct zhpe_stats_ops {
     struct zhpe_stats           *(*open)(uint16_t uid);
     void                        (*close)(void);
-    void                        (*enable)(void);
-    void                        (*disable)(void);
     struct zhpe_stats           *(*get_zhpe_stats)(void);
     void                        (*stop_all)(struct zhpe_stats *stats);
-    void                        (*pause_all)(struct zhpe_stats *stats);
-    void                        (*restart_all)(void);
     void                        (*start)(struct zhpe_stats *stats, uint32_t subid);
     void                        (*stop)(struct zhpe_stats *stats, uint32_t subid);
-    void                        (*pause)(struct zhpe_stats * stats, uint32_t subid);
     void                        (*finalize)(void);
     void                        (*key_destructor)(void *vstats);
     void                        (*stamp)(struct zhpe_stats *stats, uint32_t subid,
@@ -147,14 +142,11 @@ enum {
     ZHPE_STATS_SUBID_ZHPQ        = 50,
 };
 
+/* op ids: keep in sync with processing scripts */
 enum {
     ZHPE_STATS_START             = 1,
     ZHPE_STATS_STOP              = 2,
-    ZHPE_STATS_PAUSE             = 3,
-    ZHPE_STATS_RESUME            = 4,
-    ZHPE_STATS_ENABLE            = 5,
-    ZHPE_STATS_DISABLE           = 6,
-    ZHPE_STATS_RESTART           = 7,
+    ZHPE_STATS_STOP_ALL          = 3,
     ZHPE_STATS_STAMP             = 8,
     ZHPE_STATS_OPEN              = 9,
     ZHPE_STATS_CLOSE             = 10,

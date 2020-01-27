@@ -125,14 +125,12 @@ struct zhpe_stats {
     size_t                      head;
     struct zhpe_stats_record    *buffer;
     uint8_t                     state:4;
-    uint8_t                     pause_all:1;
     uint8_t                     enabled:1;
 };
 
 enum {
     ZHPE_STATS_STOPPED,
     ZHPE_STATS_RUNNING,
-    ZHPE_STATS_PAUSED,
 };
 
 static struct zhpe_stats *stats_nop_null(void)
@@ -177,15 +175,10 @@ static void stats_nop_voidp(void *dum)
 static struct zhpe_stats_ops zhpe_stats_nops = {
     .open               = stats_nop_open,
     .close              = stats_nop_void,
-    .enable             = stats_nop_void,
-    .disable            = stats_nop_void,
     .get_zhpe_stats     = stats_nop_null,
     .stop_all           = stats_nop_stats,
-    .pause_all          = stats_nop_stats,
-    .restart_all        = stats_nop_void,
     .start              = stats_nop_stats_uint32,
     .stop               = stats_nop_stats_uint32,
-    .pause              = stats_nop_stats_uint32,
     .finalize           = stats_nop_void,
     .key_destructor     = stats_nop_voidp,
     .stamp              = stats_nop_stamp,
@@ -483,7 +476,6 @@ void zhpe_stats_test(uint16_t uid)
     int b=0;
 
     zhpe_stats_open(uid);
-    zhpe_stats_enable();
 
     zhpe_stats_start(0);
     zhpe_stats_stop(0);
@@ -834,33 +826,6 @@ static void stats_stop(struct zhpe_stats *stats, uint32_t subid)
     stats_recordme(stats, subid, ZHPE_STATS_STOP);
 }
 
-static void stats_enable()
-{
-    struct zhpe_stats   *stats;
-    stats = pthread_getspecific(zhpe_stats_key);
-    if (!stats)
-        return;
-
-    stats->enabled = true;
-    do_rdtscp();
-    prctl(PR_TASK_PERF_EVENTS_ENABLE);
-    stats_recordme(stats, 0, ZHPE_STATS_ENABLE);
-}
-
-static void stats_disable()
-{
-    struct zhpe_stats   *stats;
-    stats = pthread_getspecific(zhpe_stats_key);
-    if (!stats)
-        return;
-
-    do_rdtscp();
-    stats->enabled = false;
-    stats_recordme(stats, 0, ZHPE_STATS_DISABLE);
-    prctl(PR_TASK_PERF_EVENTS_DISABLE);
-}
-
-
 /* rdtscp profile */
 static void rdtscp_stats_start(struct zhpe_stats *stats, uint32_t subid)
 {
@@ -872,32 +837,6 @@ static void rdtscp_stats_stop(struct zhpe_stats *stats, uint32_t subid)
     rdtscp_stats_recordme(stats, subid, ZHPE_STATS_STOP);
 }
 
-static void rdtscp_stats_enable()
-{
-    struct zhpe_stats   *stats;
-    stats = pthread_getspecific(zhpe_stats_key);
-    if (!stats)
-        return;
-
-    stats->enabled = true;
-    do_rdtscp();
-    prctl(PR_TASK_PERF_EVENTS_ENABLE);
-    rdtscp_stats_recordme(stats, 0, ZHPE_STATS_ENABLE);
-}
-
-static void rdtscp_stats_disable()
-{
-    struct zhpe_stats   *stats;
-    stats = pthread_getspecific(zhpe_stats_key);
-    if (!stats)
-        return;
-
-    do_rdtscp();
-    stats->enabled = false;
-    rdtscp_stats_recordme(stats, 0, ZHPE_STATS_DISABLE);
-    prctl(PR_TASK_PERF_EVENTS_DISABLE);
-}
-
 /* generic */
 static void stats_stamp(struct zhpe_stats *stats, uint32_t subid, uint32_t items, uint64_t *data)
 {
@@ -907,12 +846,13 @@ static void stats_stamp(struct zhpe_stats *stats, uint32_t subid, uint32_t items
     tmp.subid = subid;
     tmp.op_flag = ZHPE_STATS_STAMP;
 
-    tmp.val1 = do_rdtscp();
-    tmp.val2 = items > 0 ? ((uint64_t *)data)[0] : 0;
-    tmp.val3 = items > 1 ? ((uint64_t *)data)[1] : 0;
-    tmp.val4 = items > 2 ? ((uint64_t *)data)[2] : 0;
-    tmp.val5 = items > 3 ? ((uint64_t *)data)[3] : 0;
-    tmp.val6 = items > 4 ? ((uint64_t *)data)[4] : 0;
+    tmp.val0 = do_rdtscp();
+    tmp.val1 = items > 0 ? ((uint64_t *)data)[0] : 0;
+    tmp.val2 = items > 1 ? ((uint64_t *)data)[1] : 0;
+    tmp.val3 = items > 2 ? ((uint64_t *)data)[2] : 0;
+    tmp.val4 = items > 3 ? ((uint64_t *)data)[3] : 0;
+    tmp.val5 = items > 4 ? ((uint64_t *)data)[4] : 0;
+    tmp.val6 = items > 5 ? ((uint64_t *)data)[5] : 0;
 
     dest = stats_simple_nextslot(stats);
     stats_memcpy_saveme((char *)dest, (char *)&tmp);
@@ -928,15 +868,10 @@ static inline struct zhpe_stats *get_zhpe_stats(void)
 static struct zhpe_stats_ops stats_ops_0_rdpmc = {
     .open               = stats_open,
     .close              = stats_close,
-    .enable             = rdtscp_stats_enable,
-    .disable            = rdtscp_stats_disable,
     .get_zhpe_stats     = get_zhpe_stats,
     .stop_all           = stats_nop_stats,
-    .pause_all          = stats_nop_stats,
-    .restart_all        = stats_nop_void,
     .start              = rdtscp_stats_start,
     .stop               = rdtscp_stats_stop,
-    .pause              = stats_nop_stats_uint32,
     .finalize           = stats_finalize,
     .key_destructor     = stats_key_destructor,
     .stamp              = stats_stamp,
@@ -947,15 +882,10 @@ static struct zhpe_stats_ops stats_ops_0_rdpmc = {
 static struct zhpe_stats_ops stats_ops_2_rdpmc = {
     .open               = stats_open,
     .close              = stats_close,
-    .enable             = stats_enable,
-    .disable            = stats_disable,
     .get_zhpe_stats     = get_zhpe_stats,
     .stop_all           = stats_nop_stats,
-    .pause_all          = stats_nop_stats,
-    .restart_all        = stats_nop_void,
     .start              = stats_start,
     .stop               = stats_stop,
-    .pause              = stats_nop_stats_uint32,
     .finalize           = stats_finalize,
     .key_destructor     = stats_key_destructor,
     .stamp              = stats_stamp,
@@ -966,15 +896,10 @@ static struct zhpe_stats_ops stats_ops_2_rdpmc = {
 static struct zhpe_stats_ops stats_ops_3_rdpmc = {
     .open               = stats_open,
     .close              = stats_close,
-    .enable             = stats_enable,
-    .disable            = stats_disable,
     .get_zhpe_stats     = get_zhpe_stats,
     .stop_all           = stats_nop_stats,
-    .pause_all          = stats_nop_stats,
-    .restart_all        = stats_nop_void,
     .start              = stats_start,
     .stop               = stats_stop,
-    .pause              = stats_nop_stats_uint32,
     .finalize           = stats_finalize,
     .key_destructor     = stats_key_destructor,
     .stamp              = stats_stamp,
@@ -985,15 +910,10 @@ static struct zhpe_stats_ops stats_ops_3_rdpmc = {
 static struct zhpe_stats_ops stats_ops_4_rdpmc = {
     .open               = stats_open,
     .close              = stats_close,
-    .enable             = stats_enable,
-    .disable            = stats_disable,
     .get_zhpe_stats     = get_zhpe_stats,
     .stop_all           = stats_nop_stats,
-    .pause_all          = stats_nop_stats,
-    .restart_all        = stats_nop_void,
     .start              = stats_start,
     .stop               = stats_stop,
-    .pause              = stats_nop_stats_uint32,
     .finalize           = stats_finalize,
     .key_destructor     = stats_key_destructor,
     .stamp              = stats_stamp,
@@ -1004,15 +924,10 @@ static struct zhpe_stats_ops stats_ops_4_rdpmc = {
 static struct zhpe_stats_ops stats_ops_5_rdpmc = {
     .open               = stats_open,
     .close              = stats_close,
-    .enable             = stats_enable,
-    .disable            = stats_disable,
     .get_zhpe_stats     = get_zhpe_stats,
     .stop_all           = stats_nop_stats,
-    .pause_all          = stats_nop_stats,
-    .restart_all        = stats_nop_void,
     .start              = stats_start,
     .stop               = stats_stop,
-    .pause              = stats_nop_stats_uint32,
     .finalize           = stats_finalize,
     .key_destructor     = stats_key_destructor,
     .stamp              = stats_stamp,
@@ -1023,15 +938,10 @@ static struct zhpe_stats_ops stats_ops_5_rdpmc = {
 static struct zhpe_stats_ops stats_ops_6_rdpmc = {
     .open               = stats_open,
     .close              = stats_close,
-    .enable             = stats_enable,
-    .disable            = stats_disable,
     .get_zhpe_stats     = get_zhpe_stats,
     .stop_all           = stats_nop_stats,
-    .pause_all          = stats_nop_stats,
-    .restart_all        = stats_nop_void,
     .start              = stats_start,
     .stop               = stats_stop,
-    .pause              = stats_nop_stats_uint32,
     .finalize           = stats_finalize,
     .key_destructor     = stats_key_destructor,
     .stamp              = stats_stamp,
@@ -1132,13 +1042,13 @@ bool zhpe_stats_init(const char *stats_dir, const char *stats_unique)
             zhpe_stats_ops = &stats_ops_6_rdpmc;
             init_zhpe_stats_profile(PERF_TYPE_HARDWARE,6,PERF_COUNT_HW_INSTRUCTIONS,PERF_COUNT_HW_CPU_CYCLES,PERF_COUNT_HW_BRANCH_INSTRUCTIONS,PERF_COUNT_HW_BRANCH_MISSES,PERF_COUNT_HW_STALLED_CYCLES_FRONTEND,PERF_COUNT_HW_STALLED_CYCLES_BACKEND);
     } else {
-        if (!strcmp("raw_l2_dc",tmp)) {
+        if (!strcmp("l2_dc",tmp)) {
             zhpe_stats_profile = ZHPE_STATS_L2_DC;
             zhpe_stats_ops = &stats_ops_6_rdpmc;
             perf_typeid = PERF_TYPE_RAW;
             init_zhpe_stats_profile(perf_typeid, 6, ALL_DC_ACCESSES, ALL_L2_CACHE_MISSES1, ALL_L2_CACHE_MISSES2, ALL_L2_CACHE_MISSES3,L2_CACHE_ACCESS_FROM_DC_MISS_INCLUDING_PREFETCH,L2_CACHE_MISS_FROM_DC_MISS);
         } else {
-        if (!strcmp("hwc_l1_dc",tmp)) {
+        if (!strcmp("l1_dc",tmp)) {
             zhpe_stats_profile = ZHPE_STATS_L1_DC;
             zhpe_stats_ops = &stats_ops_5_rdpmc;
             perf_typeid = PERF_TYPE_RAW;

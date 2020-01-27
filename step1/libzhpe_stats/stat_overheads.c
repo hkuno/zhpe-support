@@ -235,6 +235,59 @@ do {            \
 } while (0)
 
 
+#define SS_STARTSTOP_SS1    \
+do {            \
+    zhpe_stats_start(ZHPE_STATS_SUBID_SS_SS_SS);      \
+    zhpe_stats_start(ZHPE_STATS_SUBID_S_SS_S);      \
+    zhpe_stats_start(0);      \
+    zhpe_stats_stop(0);      \
+    zhpe_stats_stop(ZHPE_STATS_SUBID_S_SS_S);      \
+    zhpe_stats_stop(ZHPE_STATS_SUBID_SS_SS_SS);      \
+} while (0)
+
+#define SS_STARTSTOP_SS10    \
+do {            \
+    SS_STARTSTOP_SS1;       \
+    SS_STARTSTOP_SS1;       \
+    SS_STARTSTOP_SS1;       \
+    SS_STARTSTOP_SS1;       \
+    SS_STARTSTOP_SS1;       \
+    SS_STARTSTOP_SS1;       \
+    SS_STARTSTOP_SS1;       \
+    SS_STARTSTOP_SS1;       \
+    SS_STARTSTOP_SS1;       \
+    SS_STARTSTOP_SS1;       \
+} while (0)
+
+#define SS_STARTSTOP_SS100    \
+do {            \
+    SS_STARTSTOP_SS10;       \
+    SS_STARTSTOP_SS10;       \
+    SS_STARTSTOP_SS10;       \
+    SS_STARTSTOP_SS10;       \
+    SS_STARTSTOP_SS10;       \
+    SS_STARTSTOP_SS10;       \
+    SS_STARTSTOP_SS10;       \
+    SS_STARTSTOP_SS10;       \
+    SS_STARTSTOP_SS10;       \
+    SS_STARTSTOP_SS10;       \
+} while (0)
+
+#define SS_STARTSTOP_SS1000    \
+do {            \
+    SS_STARTSTOP_SS100;       \
+    SS_STARTSTOP_SS100;       \
+    SS_STARTSTOP_SS100;       \
+    SS_STARTSTOP_SS100;       \
+    SS_STARTSTOP_SS100;       \
+    SS_STARTSTOP_SS100;       \
+    SS_STARTSTOP_SS100;       \
+    SS_STARTSTOP_SS100;       \
+    SS_STARTSTOP_SS100;       \
+    SS_STARTSTOP_SS100;       \
+} while (0)
+
+
 static void usage(char * arg0)
 {
     printf("Usage: %s <statdir> <basefilename>\n",arg0);
@@ -245,6 +298,7 @@ int main(int argc, char **argv)
     bool  ret = 1;
 
     if (argc != 3) {
+        printf("Expected 3 args, got %d\n",argc);
         usage(argv[0]);
         exit(-1);
     }
@@ -256,15 +310,13 @@ int main(int argc, char **argv)
     }
 
     zhpe_stats_open(0);
-    zhpe_stats_enable();
-
-    SS1000;
+//    SS1000;
 
     S_STAMP_S1000;
 
     S_STARTSTOP_S1000;
 
-
+    SS_STARTSTOP_SS1000;
     zhpe_stats_close();
 
     zhpe_stats_finalize();

@@ -72,19 +72,6 @@ static inline void zhpe_stats_stop_all(void)
         zhpe_stats_ops->stop_all(stats);
 }
 
-static inline void zhpe_stats_pause_all(void)
-{
-    struct zhpe_stats   *stats;
-
-    if (likely(stats = zhpe_stats_ops->get_zhpe_stats()))
-        zhpe_stats_ops->pause_all(stats);
-}
-
-static inline void zhpe_stats_restart_all(void)
-{
-    zhpe_stats_ops->restart_all();
-}
-
 static inline void zhpe_stats_start(uint32_t subid)
 {
     struct zhpe_stats   *stats;
@@ -99,24 +86,6 @@ static inline void zhpe_stats_stop(uint32_t subid)
 
     if (likely(stats = zhpe_stats_ops->get_zhpe_stats()))
         zhpe_stats_ops->stop(stats, subid);
-}
-
-static inline void zhpe_stats_pause(uint32_t subid)
-{
-    struct zhpe_stats   *stats;
-
-    if (likely(stats = zhpe_stats_ops->get_zhpe_stats()))
-        zhpe_stats_ops->pause(stats, subid);
-}
-
-static inline void zhpe_stats_enable(void)
-{
-    zhpe_stats_ops->enable();
-}
-
-static inline void zhpe_stats_disable(void)
-{
-    zhpe_stats_ops->disable();
 }
 
 #define zhpe_stats_stamp(_subid, ...)                                   \
@@ -149,13 +118,8 @@ static inline bool zhpe_stats_init(const char *stats_dir,
 #define zhpe_stats_open(uid)            do {} while (0)
 #define zhpe_stats_close()              do {} while (0)
 #define zhpe_stats_stop_all()           do {} while (0)
-#define zhpe_stats_pause_all()          do {} while (0)
-#define zhpe_stats_restart_all()        do {} while (0)
 #define zhpe_stats_start(subid)         do {} while (0)
 #define zhpe_stats_stop(subid)          do {} while (0)
-#define zhpe_stats_pause(subid)         do {} while (0)
-#define zhpe_stats_enable()             do {} while (0)
-#define zhpe_stats_disable()            do {} while (0)
 #define zhpe_stats_stamp(_subid, ...)   do {} while (0)
 #define zhpe_stats_subid(_name, _id)
 

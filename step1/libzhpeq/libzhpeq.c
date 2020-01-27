@@ -431,7 +431,7 @@ int zhpeq_commit(struct zhpeq *zq, uint32_t qindex, uint32_t n_entries)
     qmask = zq->xqinfo.cmdq.ent - 1;
 
 #ifdef HAVE_ZHPE_STATS
-    zhpe_stats_pause_all();
+//    zhpe_stats_pause_all();
     union zhpe_hw_wq_entry *wqe;
 
     for (i = 0; i < n_entries; i++) {
@@ -440,7 +440,7 @@ int zhpeq_commit(struct zhpeq *zq, uint32_t qindex, uint32_t n_entries)
                          wqe->hdr.cmp_index,
                          (uintptr_t)zq->context[wqe->hdr.cmp_index]);
     }
-    zhpe_stats_restart_all();
+ //   zhpe_stats_restart_all();
 #endif
 
     old = atm_load_rlx(&zq->tail_commit);
