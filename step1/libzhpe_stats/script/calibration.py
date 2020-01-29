@@ -108,7 +108,7 @@ class Calibration(Structure):
             if event.key.subId != 0         and \
             event.key.subId <= self.MAX_RESERVED_SUBIDS_VALUE:
                 event_delta = ProfileDataMath()
-                event_delta = event.end - event.begin
+                event_delta = event.begin.abs_distance(event.end)
                 if total_of_measures[event.key.subId - 1] == 0:
                     calibration_list[event.key.subId - 1].max = copy.deepcopy(event_delta)
                     calibration_list[event.key.subId - 1].min = copy.deepcopy(event_delta)

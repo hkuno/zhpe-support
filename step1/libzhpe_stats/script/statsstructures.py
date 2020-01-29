@@ -10,6 +10,8 @@ from ctypes import *
 -----------------------------------------------------------------
 """
 class OperationFlags(c_uint32):
+    MAX_COUNTER_VALUE   = 2**(sizeof(c_uint64)*8) 
+
     enSTART             = 1
     enSTOP              = 2
     enPAUSE             = 3
@@ -122,6 +124,16 @@ class ProfileDataMath(Structure):
         profile_data.val6 = math.ceil(self.val6*other)
         return profile_data
 
+    def __abs__(self):
+        self.val0 = abs(self.val0)
+        self.val1 = abs(self.val1)
+        self.val2 = abs(self.val2)
+        self.val3 = abs(self.val3)
+        self.val4 = abs(self.val4)
+        self.val5 = abs(self.val5)
+        self.val6 = abs(self.val6)
+        return self
+
     def get_higher(self, other):
         self.val0 = self.val0 if self.val0 >= other.val0 else other.val0
         self.val1 = self.val1 if self.val1 >= other.val1 else other.val1
@@ -177,8 +189,30 @@ class ProfileData(Structure):
         profile_data_math = profile_data_math*other
         return profile_data_math
 
+    def abs_distance(self, other):
+        #start_data_math = ProfileDataMath(self.val0 if self.val0 <= other.val0 else OperationFlags.MAX_COUNTER_VALUE - self.val0 + other.val0,
+        #                                  self.val1 if self.val1 <= other.val1 else OperationFlags.MAX_COUNTER_VALUE - self.val1 + other.val1, 
+        #                                  self.val2 if self.val2 <= other.val2 else OperationFlags.MAX_COUNTER_VALUE - self.val2 + other.val2, 
+        #                                  self.val3 if self.val3 <= other.val3 else OperationFlags.MAX_COUNTER_VALUE - self.val3 + other.val3, 
+        #                                  self.val4 if self.val4 <= other.val4 else OperationFlags.MAX_COUNTER_VALUE - self.val4 + other.val4, 
+        #                                  self.val5 if self.val5 <= other.val5 else OperationFlags.MAX_COUNTER_VALUE - self.val5 + other.val5, 
+        #                                  self.val6 if self.val6 <= other.val6 else OperationFlags.MAX_COUNTER_VALUE - self.val6 + other.val6)
+#
+        #start_data_math = other - start_data_math
+        #abs(start_data_math)
+        #return start_data_ma
 
+        profile_data_math = ProfileDataMath( other.val0 if self.val0 <= other.val0 else OperationFlags.MAX_COUNTER_VALUE + other.val0,
+                                          other.val1 if self.val1 <= other.val1 else OperationFlags.MAX_COUNTER_VALUE + other.val1, 
+                                          other.val2 if self.val2 <= other.val2 else OperationFlags.MAX_COUNTER_VALUE + other.val2, 
+                                          other.val3 if self.val3 <= other.val3 else OperationFlags.MAX_COUNTER_VALUE + other.val3, 
+                                          other.val4 if self.val4 <= other.val4 else OperationFlags.MAX_COUNTER_VALUE + other.val4, 
+                                          other.val5 if self.val5 <= other.val5 else OperationFlags.MAX_COUNTER_VALUE + other.val5, 
+                                          other.val6 if self.val6 <= other.val6 else OperationFlags.MAX_COUNTER_VALUE + other.val6)
 
+        profile_data_math = profile_data_math - self
+        abs(profile_data_math)
+        return profile_data_math
 """
 -----------------------------------------------------------------
 -----------------------------------------------------------------
