@@ -64,6 +64,16 @@ static inline void zhpe_stats_close(void)
     zhpe_stats_ops->close();
 }
 
+static inline void zhpe_stats_pause_all(void)
+{
+    zhpe_stats_ops->pause_all();
+}
+
+static inline void zhpe_stats_restart_all(void)
+{
+    zhpe_stats_ops->restart_all();
+}
+
 static inline void zhpe_stats_stop_all(void)
 {
     zhpe_stats_ops->stop_all();
@@ -106,10 +116,12 @@ static inline bool zhpe_stats_init(const char *stats_dir,
 #define zhpe_stats_finalize()           do {} while (0)
 #define zhpe_stats_open(uid)            do {} while (0)
 #define zhpe_stats_close()              do {} while (0)
+#define zhpe_stats_pause_all()          do {} while (0)
+#define zhpe_stats_restart_all()         do {} while (0)
 #define zhpe_stats_stop_all()           do {} while (0)
 #define zhpe_stats_start(subid)         do {} while (0)
 #define zhpe_stats_stop(subid)          do {} while (0)
-#define zhpe_stats_stamp(_subid, ...)   do {} while (0)
+#define zhpe_stats_stamp(_subid, _v1, _v2, _v3, _v4, _v5, _v6)   do {} while (0)
 #define zhpe_stats_subid(_name, _id)
 
 #endif

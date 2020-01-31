@@ -17,3 +17,7 @@ add_subdirectory(libzhpeq_util)
 install(
   FILES ${CMAKE_SOURCE_DIR}/include/zhpeq_util_fab_atomic.h
   DESTINATION include)
+
+install(
+  FILES ${CMAKE_SOURCE_DIR}/include/hpe_sim_api_linux64.h
+  DESTINATION include)

@@ -78,7 +78,7 @@ static int do_reg(const struct args *args)
 
     for (size = args->start_size, steps = 0; steps < args->steps;
          size <<= 1, steps++) {
-        zhpe_stats_stamp(0, size);
+        zhpe_stats_stamp(0, size, 0, 0, 0, 0, 0);
         /* Warmups, local+remote. */
         for (i = 0; i < 10; i++) {
             ret = fi_mr_reg(fab_dom.domain, buf, buf_size, lcl_acc | rem_acc,

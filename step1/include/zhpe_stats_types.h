@@ -113,13 +113,15 @@ struct zhpe_stats_record {
 struct zhpe_stats_ops {
     void                   (*open)(uint16_t uid);
     void                   (*close)(void);
-    struct zhpe_stats      *(*get_zhpe_stats)(void);
+    void                   (*pause_all)();
+    void                   (*restart_all)();
     void                   (*stop_all)();
     void                   (*start)(uint32_t subid);
     void                   (*stop)(uint32_t subid);
     void                   (*finalize)(void);
-    void                   (*key_destructor)(void *vstats);
-    void                   (*stamp)(uint32_t subid, uint64_t d1, uint64_t d2, uint64_t d3, uint64_t d4, uint64_t d5, uint64_t d6);
+    void                   (*stamp)(uint32_t subid, uint64_t d1, uint64_t d2,
+                                                    uint64_t d3, uint64_t d4,
+                                                    uint64_t d5, uint64_t d6);
     void                   (*setvals)(struct zhpe_stats_record *rec);
     struct zhpe_stats_record    *(*nextslot)();
     void                   (*saveme)(char *dest, char *src);
@@ -138,6 +140,8 @@ enum {
     ZHPE_STATS_START             = 1,
     ZHPE_STATS_STOP              = 2,
     ZHPE_STATS_STOP_ALL          = 3,
+    ZHPE_STATS_PAUSE_ALL         = 4,
+    ZHPE_STATS_RESTART_ALL       = 5,
     ZHPE_STATS_STAMP             = 8,
     ZHPE_STATS_OPEN              = 9,
     ZHPE_STATS_CLOSE             = 10,
@@ -167,6 +171,36 @@ enum {
     ZHPE_STATS_CPU          = 300,
     ZHPE_STATS_DISABLED     = 400,
     ZHPE_STATS_RDTSCP       = 500,
+};
+
+/* for looking up hpe_sim offsets */
+enum {
+    COHERENCY_CASTOUT_DATA_L1   =0,
+    COHERENCY_CASTOUT_INST_L1   =1,
+    CAPACITY_CASTOUT_DATA_L1    =2,
+    CAPACITY_CASTOUT_INST_L1    =3,
+    LINE_MISS_DATA_L1           =4,
+    LINE_HIT_DATA_L1            =5,
+    LINE_MISS_INST_L1           =6,
+    LINE_HIT_INST_L1            =7,
+    UNCACHED_READ_INST_L1       =8,
+    UNCACHED_READ_DATA_L1       =9,
+    UNCACHED_WRITE_DATA_L1      =10,
+    LINE_CASTOUT_DIRTY_DATA_L1  =11,
+    COHERENCY_CASTOUT_DATA_L2   =12,
+    CAPACITY_CASTOUT_DATA_L2    =13,
+    LINE_MISS_DATA_L2           =14,
+    LINE_HIT_DATA_L2            =15,
+    LINE_CASTOUT_DIRTY_DATA_L2  =16,
+    LINE_MISS_WRITE_THROUGH_L2  =17,
+};
+
+enum {
+    EXEC_INST_TOTAL         =0,
+    CPL0_EXEC_INST_TOTAL    =1,
+    CPL1_EXEC_INST_TOTAL    =2,
+    CPL2_EXEC_INST_TOTAL    =3,
+    CPL3_EXEC_INST_TOTAL    =4,
 };
 
 _EXTERN_C_END
