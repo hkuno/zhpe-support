@@ -8,7 +8,7 @@ include("../common.cmake")
 include("../simh.cmake")
 include("../likwid.cmake")
 
-include_directories(BEFORE ../include asic/include)
+include_directories(BEFORE ../include asic/include /usr/include)
 
 add_subdirectory(libzhpe_stats)
 add_subdirectory(libzhpeq)

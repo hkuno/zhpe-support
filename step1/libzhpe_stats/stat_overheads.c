@@ -303,22 +303,28 @@ int main(int argc, char **argv)
         exit(-1);
     }
 
+printf("FOOBAR About to init\n");
     ret = zhpe_stats_init(argv[1], argv[2]);
     if (! ret) {
         usage(argv[0]);
         exit(ret);
     }
 
-    zhpe_stats_open(0);
-//    SS1000;
+printf("FOOBAR About to open\n");
+  zhpe_stats_open(1);
 
-    S_STARTSTOP_S1000;
+printf("FOOBAR About to call SS10\n");
+    SS10;
+//printf("About to call iS_STARTSTOP_S1000\n");
+//    S_STARTSTOP_S1000;
 
-    SS_STARTSTOP_SS1000;
-    zhpe_stats_close();
+//printf("About to call SS_STARTSTOP_SS1000;\n");
+//    SS_STARTSTOP_SS1000;
 
-    S_STAMP_S1000;
+//printf("FOOBAR About to call zhpe_stats_close\n");
+ //  zhpe_stats_close();
 
+printf("About to call zhpe_stats_finalize\n");
     zhpe_stats_finalize();
 
     ret = 0;

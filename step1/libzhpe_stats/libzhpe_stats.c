@@ -45,8 +45,6 @@
 #include <linux/perf_event.h>
 #include <sys/prctl.h>
 
-#include <hpe_sim_api_linux64.h>
-
 #include <math.h>
 
 static_assert(sizeof(struct zhpe_stats_record)%64 == 0, "foo");
@@ -177,6 +175,7 @@ __thread struct zhpe_stats_ops *zhpe_stats_ops = &zhpe_stats_nops;
 __thread struct zhpe_stats *zhpe_stats = NULL;
 
 #ifdef HAVE_ZHPE_STATS
+#include <hpe_sim_api_linux64.h>
 #include <zhpe_stats.h>
 #define ZHPE_STATS_BUF_COUNT_MAX 1048576
 
@@ -277,21 +276,36 @@ static void stats_setvals_6_rdpmc(struct zhpe_stats_record *rec)
 
 static void stats_setvals_hpe_sim(struct zhpe_stats_record *rec)
 {
+    //uint64_t len =  sizeof(uint64_t);
     ProcCtlData *foo;
     rec->val0 = do_rdtscp();
-    foo = (ProcCtlData *)zhpe_stats->sim_buf;
+    foo = (void *)zhpe_stats->sim_buf;
 
-assert(zhpe_stats->sim_buf);
-    if (sim_api_data_rec(DATA_REC_PAUSE, zhpe_stats->uid,
-                                        (uintptr_t)zhpe_stats->sim_buf))
+    assert(zhpe_stats->sim_buf);
+    int64_t ret;
+
+    ret = sim_api_data_rec(DATA_REC_PAUSE, (uint16_t)zhpe_stats->uid,
+                                        (uintptr_t)zhpe_stats->sim_buf);
+    if (ret)
     {
         print_func_err(__func__, __LINE__, "sim_api_data_rec",
-                       "DATA_REC_PAUSE", -EINVAL);
+                       "DATA_REC_PAUSE", ret);
         abort();
     }
 
+   // memcpy(&rec->val1, &foo->cpl0ExecInstTotal, len);
+   // memcpy(&rec->val2, &foo->cpl3ExecInstTotal, len);
     rec->val1 = foo->cpl0ExecInstTotal;
     rec->val2 = foo->cpl3ExecInstTotal;
+
+    ret = sim_api_data_rec(DATA_REC_START, (uint16_t)zhpe_stats->uid,
+                                        (uintptr_t)zhpe_stats->sim_buf);
+    if (ret)
+    {
+        print_func_err(__func__, __LINE__, "sim_api_data_rec",
+                       "DATA_REC_START", ret);
+        abort();
+    }
 }
 
 static inline void stats_vmemcpy_saveme(char * dest, char * src)
@@ -406,23 +420,47 @@ void zhpe_stats_flush()
     zhpe_stats->head = 0;
 }
 
-/* don't really close. Just log events for cpu profile and flush stats. */
 static void stats_close()
 {
+//printf("In stats_close\n");
     if (!zhpe_stats)
         return ;
 
     zhpe_stats->enabled = false;
+
+ //   printf("about to free zhpe_stats\n");
+    free(zhpe_stats);
+    zhpe_stats = NULL;
+}
+
+static void rdpmc_stats_close()
+{
+//printf("IN rdpmc_stats_close\n");
     stats_recordme(0, ZHPE_STATS_CLOSE);
     zhpe_stats_flush(zhpe_stats);
+
+    for (int i=0;i<zhpe_stats_num_counters;i++)
+    {
+        if (zhpe_stats_fd_list[i] != -1)
+        {
+           close(zhpe_stats_fd_list[i]);
+           zhpe_stats_fd_list[i]=-1;
+        }
+    }
+    stats_close();
 }
 
 static void sim_stats_close()
 {
-    if (sim_api_data_rec(DATA_REC_END, zhpe_stats->uid,
-                                       (uintptr_t)zhpe_stats->sim_buf))
+    int64_t ret;
+//printf("IN sim_stats_close\n");
+//printf("about to DATA_REC_END\n");
+    ret=sim_api_data_rec(DATA_REC_END, zhpe_stats->uid,
+                                       (uintptr_t)zhpe_stats->sim_buf);
+    if (ret)
         print_func_err(__func__, __LINE__, "sim_api_data_rec",
-                       "DATA_REC_END", -EINVAL);
+                       "DATA_REC_END", ret);
+    zhpe_stats_flush(zhpe_stats);
     stats_close();
 }
 
@@ -460,26 +498,31 @@ static void stats_stop_all_memcpy(uint32_t subid)
 
 static void stats_start(uint32_t subid)
 {
+//printf("IN stats_start\n");
     stats_recordme(subid, ZHPE_STATS_START);
 }
 
 static void stats_stop(uint32_t subid)
 {
+//printf("IN stats_stop\n");
     stats_recordme(subid, ZHPE_STATS_STOP);
 }
 
 static void stats_pause_all(uint32_t subid)
 {
+//printf("IN stats_pause_all\n");
     stats_recordme(subid, ZHPE_STATS_PAUSE_ALL);
 }
 
 static void stats_restart_all(uint32_t subid)
 {
+//printf("IN stats_restart_all\n");
     stats_recordme(subid, ZHPE_STATS_RESTART_ALL);
 }
 
 static void stats_stop_all(uint32_t subid)
 {
+//printf("IN stats_stop_all\n");
     stats_recordme(subid, ZHPE_STATS_STOP_ALL);
 }
 
@@ -510,7 +553,7 @@ static void stats_stamp(uint32_t subid,
 
 static struct zhpe_stats_ops stats_ops_rdpmc = {
     .open               = stats_minimal_open,
-    .close              = stats_close,
+    .close              = rdpmc_stats_close,
     .pause_all          = stats_pause_all,
     .restart_all        = stats_restart_all,
     .stop_all           = stats_stop_all,
@@ -524,7 +567,7 @@ static struct zhpe_stats_ops stats_ops_rdpmc = {
 
 static struct zhpe_stats_ops stats_ops_rdpmc_memcpy = {
     .open               = stats_minimal_open,
-    .close              = stats_close,
+    .close              = rdpmc_stats_close,
     .pause_all          = stats_pause_all,
     .restart_all         = stats_restart_all,
     .stop_all           = stats_stop_all_memcpy,
@@ -793,18 +836,23 @@ bool zhpe_stats_init(const char *stats_dir, const char *stats_unique)
 static void stats_sim_open(uint16_t uid)
 {
     uint64_t                    len;
-    if (sim_api_data_rec(DATA_REC_CREAT, uid,
-                                      (uintptr_t)&len)) {
+    int64_t ret;
+//printf("about to DATA_REC_CREAT for uid %d\n", uid);
+    ret=sim_api_data_rec(DATA_REC_CREAT, uid,
+                                      (uintptr_t)&len);
+    if (ret) {
         print_func_err(__func__, __LINE__, "sim_api_data_rec",
-                       "DATA_REC_CREAT", -EINVAL);
+                       "DATA_REC_CREAT", ret);
         abort();
     }
 
     zhpe_stats->sim_buf = calloc(1,len);
 
-    if (sim_api_data_rec(DATA_REC_START, uid, (uintptr_t)zhpe_stats->sim_buf)) {
+//printf("about to DATA_REC_START\n");
+    ret=sim_api_data_rec(DATA_REC_START, uid, (uintptr_t)zhpe_stats->sim_buf);
+    if (ret) {
         print_func_err(__func__, __LINE__, "sim_api_data_rec",
-                       "DATA_REC_START", -EINVAL);
+                       "DATA_REC_START", ret);
         abort();
     }
 }
