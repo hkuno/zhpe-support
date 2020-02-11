@@ -298,33 +298,26 @@ int main(int argc, char **argv)
     bool  ret = 1;
 
     if (argc != 3) {
-        printf("Expected 3 args, got %d\n",argc);
+        printf("Expected 2 args, got %d\n",argc-1);
         usage(argv[0]);
         exit(-1);
     }
 
-printf("FOOBAR About to init\n");
     ret = zhpe_stats_init(argv[1], argv[2]);
     if (! ret) {
         usage(argv[0]);
         exit(ret);
     }
 
-printf("FOOBAR About to open\n");
-  zhpe_stats_open(1);
+    zhpe_stats_open(1);
 
-printf("FOOBAR About to call SS10\n");
-    SS10;
-//printf("About to call iS_STARTSTOP_S1000\n");
-//    S_STARTSTOP_S1000;
+    SS100;
+    S_STARTSTOP_S100;
 
-//printf("About to call SS_STARTSTOP_SS1000;\n");
-//    SS_STARTSTOP_SS1000;
+    S_STAMP_S100;
 
-//printf("FOOBAR About to call zhpe_stats_close\n");
- //  zhpe_stats_close();
+    zhpe_stats_close();
 
-printf("About to call zhpe_stats_finalize\n");
     zhpe_stats_finalize();
 
     ret = 0;

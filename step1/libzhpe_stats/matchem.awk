@@ -8,6 +8,11 @@
       ZHPE_PAUSE_ALL=4
       ZHPE_RESTART_ALL=5
       ZHPE_STAMP=8
+      for ( i=0; i <20; i++ )
+      {
+          nested_stamp_count[i]=0;
+          nested_measurement_count[i]=0;
+      }
     }
     {
         if (($1 < 0 ) || ($1 > 99))
@@ -18,7 +23,14 @@
         {
         if ($1 == ZHPE_START)
         {
+            if (nestlvl > 0)
+            {
+                for ( i=0; i< nestlvl; i++)
+                    nested_measurement_count[i]++;
+            }
+
             nestlvl++;
+
             stack[stacklen++] = $2;
             if  ($2 in ndata)
             {
@@ -41,6 +53,12 @@
         {
             if ($1 == ZHPE_STAMP)
             {
+                if (nestlvl > 0)
+                {
+                    for ( i=0; i< nestlvl; i++)
+                        nested_stamp_count[i]++;
+                }
+
                 nestlvl++;
                 printf("%d,%d,", $1, $2);
                 printf("%d,", $3);
@@ -50,7 +68,9 @@
                 printf("%d,", $7);
                 printf("%d,", $8);
                 printf("%d,", $9);
-                printf("%d", nestlvl);
+                printf("%d,", nested_measurement_count[nestlvl]);
+                printf("%d,", nested_stamp_count[nestlvl]);
+                printf("%d,", nestlvl);
                 printf("\n");
                 nestlvl--;
             }
@@ -59,11 +79,20 @@
             if ($1 == ZHPE_STOP)
             {
                 stacklen--;
+                nestlvl--;
+
+                if (nestlvl > 0)
+                {
+                    for ( i=0; i< nestlvl; i++)
+                        nested_measurement_count[i]++;
+                }
+
                 cursubid = stack[stacklen];
                 if ( cursubid != $2 )
                 {
                     printf("# unmatched stop %d != %d\n",cursubid2, $2);
                     stacklen++;
+                    nestlvl++;
                 } else {
                     cur = ndata[$2];
                     ndata[$2] = cur - 1;
@@ -75,9 +104,13 @@
                     printf("%d,", $7 - data4[$2][cur]);
                     printf("%d,", $8 - data5[$2][cur]);
                     printf("%d,", $9 - data6[$2][cur]);
-                    printf("%d", nestlvl);
+                    printf("%d,", nested_measurement_count[nestlvl]);
+                    printf("%d,", nested_stamp_count[nestlvl]);
+                    printf("%d,", nestlvl);
                     printf("\n");
-                    nestlvl--;
+
+                    nested_measurement_count[nestlvl] = 0;
+                    nested_stamp_count[nestlvl] = 0;
                 }
             }
             else
@@ -87,6 +120,7 @@
                     while ( stacklen > 0 )
                     {
                         stacklen--;
+                        nestlvl--;
                         cursubid = stack[stacklen];
                         cur = ndata[cursubid];
                         ndata[cursubid] = cur - 1;
@@ -98,9 +132,12 @@
                         printf("%d,", $7 - data4[cursubid][cur]);
                         printf("%d,", $8 - data5[cursubid][cur]);
                         printf("%d,", $9 - data6[cursubid][cur]);
-                        printf("%d", nestlvl);
+                        printf("%d,", nested_measurement_count[nestlvl]);
+                        printf("%d,", nested_stamp_count[nestlvl]);
+                        printf("%d,", nestlvl);
                         printf("\n");
-                        nestlvl--;
+                        nested_measurement_count[nestlvl] = 0;
+                        nested_stamp_count[nestlvl] = 0;
                     }
                 }
                 else
@@ -119,6 +156,7 @@
                         while ( stacklen > 0 )
                         {
                             stacklen--;
+                            nestlvl--;
                             cursubid = stack[stacklen];
                             cur = ndata[cursubid];
                             ndata[cursubid] = cur - 1;
@@ -130,9 +168,12 @@
                             printf("%d,", $7 - data4[cursubid][cur]);
                             printf("%d,", $8 - data5[cursubid][cur]);
                             printf("%d,", $9 - data6[cursubid][cur]);
-                            printf("%d", nestlvl);
+                            printf("%d,", nested_measurement_count[nestlvl]);
+                            printf("%d,", nested_stamp_count[nestlvl]);
+                            printf("%d,", nestlvl);
                             printf("\n");
-                            nestlvl--;
+                            nested_measurement_count[nestlvl] = 0;
+                            nested_stamp_count[nestlvl] = 0;
                             paused[foocnt] = cursubid;
                             foocnt++;
                         }
@@ -143,7 +184,12 @@
                         printf("# Restarting %d\n",pausedlen);
                         for ( i=pausedlen-1; i >= 0; i-- )
                         {
-                            nestlvl++;
+                            if (nestlvl > 0)
+                            {
+                                for ( j=0; j< nestlvl; j++)
+                                    nested_measurement_count[j]++;
+                            }
+
                             cursubid = paused[i];
                             stack[stacklen++] = cursubid;
                             if  (cursubid in ndata)
@@ -162,10 +208,11 @@
                             data4[cursubid][cur]=$7;
                             data5[cursubid][cur]=$8;
                             data6[cursubid][cur]=$9;
+                            nestlvl++;
                         }
                         pausedlen=0;
                     } else {
-                                printf("%d,%d,", $1, $2);
+                                printf("##%d,%d,", $1, $2);
                                 printf("%d,", $3);
                                 printf("%d,", $4);
                                 printf("%d,", $5);
@@ -173,7 +220,9 @@
                                 printf("%d,", $7);
                                 printf("%d,", $8);
                                 printf("%d,", $9);
-                                printf("%d", nestlvl);
+                                printf("%d,", nested_measurement_count[nestlvl]);
+                                printf("%d,", nested_stamp_count[nestlvl]);
+                                printf("%d,", nestlvl);
                                 printf("\n");
                             }
              } } } } } }
@@ -193,7 +242,9 @@
             printf("%d,", $7 - data4[cursubid][cur]);
             printf("%d,", $8 - data5[cursubid][cur]);
             printf("%d,", $9 - data6[cursubid][cur]);
-            printf("%d", nestlvl);
+            printf("%d,", nested_measurement_count[nestlvl]);
+            printf("%d,", nested_stamp_count[nestlvl]);
+            printf("%d,", nestlvl);
             printf("\n");
             nestlvl--;
         }
