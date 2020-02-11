@@ -62,36 +62,23 @@
                 cursubid = stack[stacklen];
                 if ( cursubid != $2 )
                 {
-                    printf("Out-of-order warning: stack %d != %d\n",cursubid, $2);
-                    stacklen--;
-                    cursubid2 = stack[stacklen];
-                    if ( cursubid2 == $2 )
-                    {
-                        stack[stacklen] = cursubid;
-                        cursubid = cursubid2;
-                        stacklen++;
-                    }
-                    else
-                    {
-                        printf("Warning: Also next on stack %d != %d\n",cursubid2, $2);
-                        printf("# unmatched stop %d != %d\n",cursubid2, $2);
-                        stacklen++;
-                        stacklen++;
-                    }
+                    printf("# unmatched stop %d != %d\n",cursubid2, $2);
+                    stacklen++;
+                } else {
+                    cur = ndata[$2];
+                    ndata[$2] = cur - 1;
+                    printf("%d,%d,", $1, $2);
+                    printf("%d,", $3 - data0[$2][cur]);
+                    printf("%d,", $4 - data1[$2][cur]);
+                    printf("%d,", $5 - data2[$2][cur]);
+                    printf("%d,", $6 - data3[$2][cur]);
+                    printf("%d,", $7 - data4[$2][cur]);
+                    printf("%d,", $8 - data5[$2][cur]);
+                    printf("%d,", $9 - data6[$2][cur]);
+                    printf("%d", nestlvl);
+                    printf("\n");
+                    nestlvl--;
                 }
-                cur = ndata[$2];
-                ndata[$2] = cur - 1;
-                printf("%d,%d,", $1, $2);
-                printf("%d,", $3 - data0[$2][cur]);
-                printf("%d,", $4 - data1[$2][cur]);
-                printf("%d,", $5 - data2[$2][cur]);
-                printf("%d,", $6 - data3[$2][cur]);
-                printf("%d,", $7 - data4[$2][cur]);
-                printf("%d,", $8 - data5[$2][cur]);
-                printf("%d,", $9 - data6[$2][cur]);
-                printf("%d", nestlvl);
-                printf("\n");
-                nestlvl--;
             }
             else
             {
