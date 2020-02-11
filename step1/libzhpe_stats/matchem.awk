@@ -16,7 +16,7 @@
         }
         else
         {
-        if (($1 == ZHPE_START) || ($1 == ZHPE_RESTART_ALL))
+        if ($1 == ZHPE_START)
         {
             nestlvl++;
             stack[stacklen++] = $2;
@@ -63,15 +63,19 @@
                 if ( cursubid != $2 )
                 {
                     printf("Out-of-order warning: stack %d != %d\n",cursubid, $2);
+                    stacklen--;
                     cursubid2 = stack[stacklen];
                     if ( cursubid2 == $2 )
                     {
                         stack[stacklen] = cursubid;
                         cursubid = cursubid2;
+                        stacklen++;
                     }
                     else
                     {
                         printf("Warning: Also next on stack %d != %d\n",cursubid2, $2);
+                        printf("# unmatched stop %d != %d\n",cursubid2, $2);
+                        stacklen++;
                         stacklen++;
                     }
                 }
@@ -99,7 +103,7 @@
                         cursubid = stack[stacklen];
                         cur = ndata[cursubid];
                         ndata[cursubid] = cur - 1;
-                        printf("%s,%s,", ZHPE_STOP_ALL, $2);
+                        printf("%s,%s,", ZHPE_STOP_ALL, cursubid);
                         printf("%d,", $3 - data0[cursubid][cur]);
                         printf("%d,", $4 - data1[cursubid][cur]);
                         printf("%d,", $5 - data2[cursubid][cur]);
@@ -116,6 +120,7 @@
                 {
                 if ($1 == ZHPE_PAUSE_ALL)
                 {
+                    printf("# PAUSING %d\n",stacklen);
                     if (( pausedlen > 0 ) && (stacklen > 0))
                     {
                       printf("ERROR: Cannot nest stats_pause_all\n");
@@ -123,13 +128,14 @@
                         if (stacklen > 0)
                             pausedlen=stacklen;
 
+                        foocnt=0;
                         while ( stacklen > 0 )
                         {
                             stacklen--;
                             cursubid = stack[stacklen];
                             cur = ndata[cursubid];
                             ndata[cursubid] = cur - 1;
-                            printf("%s,%s,", ZHPE_PAUSE_ALL, $2);
+                            printf("%s,%s,", ZHPE_PAUSE_ALL, cursubid);
                             printf("%d,", $3 - data0[cursubid][cur]);
                             printf("%d,", $4 - data1[cursubid][cur]);
                             printf("%d,", $5 - data2[cursubid][cur]);
@@ -140,15 +146,15 @@
                             printf("%d", nestlvl);
                             printf("\n");
                             nestlvl--;
-                            paused[pausedlen - stacklen] = cursubid;
+                            paused[foocnt] = cursubid;
+                            foocnt++;
                         }
                     }
                 } else {
                     if ($1 == ZHPE_RESTART_ALL)
                     {
-
-                        printf("%d,%d,%d,0,0,0,0,0,0,0\n", ZHPE_STAMP, ZHPE_RESTART_ALL, pausedlen);
-                        for ( i=0; i < pausedlen; i++ )
+                        printf("# Restarting %d\n",pausedlen);
+                        for ( i=pausedlen-1; i >= 0; i-- )
                         {
                             nestlvl++;
                             cursubid = paused[i];
