@@ -11,9 +11,9 @@ awk -F, -f matchem.awk ${INPUT}.dat > ${INPUT}.dat.matched
 # discard outliers
 TOTAL=`grep -e '^2,0,' ${INPUT}.dat.matched | wc -l`
 
-#HEAD=$TOTAL
-HEAD=$(( $TOTAL - 50 ))
-TAIL=$(( $TOTAL - 100 ))
+HEAD=$TOTAL
+HEAD=$(( $TOTAL - 2 ))
+TAIL=$(( $TOTAL - 2 ))
 
 if [[ $HEAD -le 0 ]]; then
    echo "ERROR: TOTAL is $TOTAL; HEAD is $HEAD"

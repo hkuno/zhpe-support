@@ -59,7 +59,6 @@
                         nested_stamp_count[i]++;
                 }
 
-                nestlvl++;
                 printf("%d,%d,", $1, $2);
                 printf("%d,", $3);
                 printf("%d,", $4);
@@ -72,7 +71,6 @@
                 printf("%d,", nested_stamp_count[nestlvl]);
                 printf("%d,", nestlvl);
                 printf("\n");
-                nestlvl--;
             }
         else
         {
