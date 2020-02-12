@@ -182,12 +182,6 @@
                         printf("# Restarting %d\n",pausedlen);
                         for ( i=pausedlen-1; i >= 0; i-- )
                         {
-                            if (nestlvl > 0)
-                            {
-                                for ( j=0; j< nestlvl; j++)
-                                    nested_measurement_count[j]++;
-                            }
-
                             cursubid = paused[i];
                             stack[stacklen++] = cursubid;
                             if  (cursubid in ndata)
