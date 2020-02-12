@@ -3,17 +3,15 @@
 INPUT=$1
 
 # hardcode temporarily
-OVERHEADFILE="cpu.overheads"
+OVERHEADFILE="carbon.overheads"
 
 declare -A overheads
 
 
-BASIC=
-
 # read overhead file
 for (( i=0;i<=6;i++ ))
 do
-    for j in BASIC STAMP STARTSTOP
+    for j in BASIC STAMP MEASUREMENT
     do
         vname="${j}_V${i}"
         overheads[${vname}]=$( grep ${vname}: $OVERHEADFILE | awk '{print $2}' )
@@ -23,72 +21,55 @@ do
 done
 
 # produce .dat file
-#python3 unpackdata.py $INPUT > ${INPUT}.dat
+python3 unpackdata.py $INPUT > ${INPUT}.dat
 
 # produce .dat.matched file
-#awk -F, -f matchem.awk ${INPUT}.dat > ${INPUT}.dat.matched
+awk -F, -f matchem.awk ${INPUT}.dat > ${INPUT}.dat.matched
 
+# .dat.matched file has format:
+#opflag,subid,val0,val1,val2,val3,val4,val5,val6,nested_measure_cnt,nested_stamp_cnt,nest_lvl
+# 1    , 2   ,  3 , 4  , 5  , 6  , 7  , 8  , 9  , 10               ,  11            , 12
 # walk through input file and adjust overheads
-# nested_stamp_count=0
-# nested_ss_count=0
-# cur_nest=0
-# For each line, look at that line's op (this_op) and nesting level (this_nest).
-#
-# 1. If this_op is ZHPE_STAMP, then print out line and nested_stamp_count++
-#
-# 1. If this_op is ZHPE_STOP, then:
-#     1. if this_nest < prev_nest;
-#                then nested_ss_count++;
-#        else
-#                then nested_ss_count=0; nested_stamp_count=0;
-#     1. adjust and print each counter like this:
-#          val - overheads[$basic_vname]
-#              - (nested_stamp_count * overheads[$stamp_vname])
-#              - (nested_ss_count * overheads[$ss_vname])
-#     1. prev_nest = this_nest
-#
-awk -F, '
-    BEGIN {
-      nested_stamp_count=0;
-      nested_ss_count=0;
-      prev_nest=0;
-      ZHPE_START=1
-      ZHPE_STOP=2
-      ZHPE_STOP_ALL=3
-      ZHPE_STAMP=8
-    }
-    {
-        this_opt=$1
-        this_nest=$10
-        if (this_opt == ZHPE_STAMP)
-        {
-             print $0;
-             nested_stamp_count++;
-        }
-        else
-        {
-            if ( this_nest < prev_nest)
-            {
-                nested_ss_count++;
-            }
-            else
-            {
-                nested_ss_count=0;
-                nested_stamp_count=0;
-            }
-            if (this_opt == ZHPE_STOP)
-            {
-                printf("%d,%d,", $1, $2);
-                printf("v0 is %.3f,", $3);
-                printf("basic v0 is %d,", '${overheads[BASIC_V0]}');
-                printf("nested_stamp_count is %d,", nested_stamp_count );
-                printf("nested_ss_count is %d,", nested_ss_count );
-                printf("adjusted v0 is %.3f,", (($3 - '${overheads[BASIC_V0]}') - (nested_stamp_count * '${overheads[STAMP_V0]}')  - (nested_ss_count * '${overheads[STARTSTOP_V0]}')));
-                printf("%d", this_nest);
-                printf("\n");
-            }
-            prev_nest = this_nest;
-        }
-   }
-done' $1
+# For each valn of each line, overhead is:
+#        valn - overheads[BASIC_Vn] - (nested_stamp_cnt * overheads[STAMP_Vn]) - (nested_measure_cnt * overheads[MEASUREMENT_Vn])
 
+awk -F, \
+'{
+    if ( ($1 == 8) || ($1 < 0 ) || ($1 > 99))
+    {
+        printf("%s\n",$0);
+    }
+    else
+    {
+              printf("%d,%d,",$1,$2);
+              printf("%.3f,", $3 - '${overheads[BASIC_V0]}' - \
+                                   ($11 * '${overheads[STAMP_V0]}') - \
+                                   ($10 *  '${overheads[MEASUREMENT_V0]}'));
+
+              printf("%.3f,", $4 - '${overheads[BASIC_V1]}' - \
+                                   ($11 * '${overheads[STAMP_V1]}') - \
+                                   ($10 *  '${overheads[MEASUREMENT_V1]}'));
+
+              printf("%.3f,", $5 - '${overheads[BASIC_V2]}' - \
+                                   ($11 * '${overheads[STAMP_V2]}') - \
+                                   ($10 *  '${overheads[MEASUREMENT_V2]}'));
+
+              printf("%.3f,", $6 - '${overheads[BASIC_V3]}' - \
+                                   ($11 * '${overheads[STAMP_V3]}') - \
+                                   ($10 *  '${overheads[MEASUREMENT_V3]}'));
+
+              printf("%.3f,", $7 - '${overheads[BASIC_V4]}' - \
+                                   ($11 * '${overheads[STAMP_V4]}') - \
+                                   ($10 *  '${overheads[MEASUREMENT_V4]}'));
+
+              printf("%.3f,", $8 - '${overheads[BASIC_V5]}' - \
+                                   ($11 * '${overheads[STAMP_V5]}') - \
+                                   ($10 *  '${overheads[MEASUREMENT_V5]}'));
+
+              printf("%.3f,", $9 - '${overheads[BASIC_V6]}' - \
+                                   ($11 * '${overheads[STAMP_V6]}') - \
+                                   ($10 *  '${overheads[MEASUREMENT_V6]}'));
+
+              printf("%d,%d,%d\n",$10,$11,$12);
+    }
+}'  ${INPUT}.dat.matched >  ${INPUT}.dat.matched.adjusted
