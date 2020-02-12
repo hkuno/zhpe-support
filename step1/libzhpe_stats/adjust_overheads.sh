@@ -3,7 +3,8 @@
 INPUT=$1
 
 # hardcode temporarily
-OVERHEADFILE="carbon.overheads"
+#OVERHEADFILE="carbon.overheads"
+OVERHEADFILE="cpu.overheads"
 
 declare -A overheads
 

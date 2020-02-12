@@ -23,8 +23,6 @@ BASIC_V5=`grep -e '^2,0,' ${INPUT}.dat.matched | grep -v \- |\
 BASIC_V6=`grep -e '^2,0,' ${INPUT}.dat.matched | grep -v \- |\
            awk -F, '{printf"%f\n", $9}' | sort -n| head -1`
 
-
-
 # get nested stamp overhead
 TMP_V0=`grep -e '^2,2,' ${INPUT}.dat.matched | grep -v \- |\
            awk -F, '{printf"%f\n", $3}' | sort -n| head -1`
