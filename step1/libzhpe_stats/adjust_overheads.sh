@@ -2,16 +2,38 @@
 
 INPUT=$1
 
-# hardcode temporarily
-OVERHEADFILE="carbon.overheads"
+# produce .dat file
+python3 unpackdata.py $INPUT > ${INPUT}.dat
+
+# get overhead file from metadata
+
+profileid=`grep profileid: ${INPUT}.dat | head -1 | awk '{print $2}'`
+
+case $profileid in
+    200) OVERHEADFILE="carbon.overheads"
+         ;;
+    100) OVERHEADFILE="cache.overheads"
+         ;;
+    101) OVERHEADFILE="cache_alt.overheads"
+         ;;
+    301) OVERHEADFILE="cpu.overheads"
+         ;;
+    default) echo "ERROR: No overhead for $profileid"
+          exit;
+         ;;
+esac
 
 declare -A overheads
 
+if [[ ! -f $OVERHEADFILE ]]; then
+    echo "ERROR: No overhead for $profileid"
+    exit;
+fi
 
 # read overhead file
 for (( i=0;i<=6;i++ ))
 do
-    for j in BASIC STAMP MEASUREMENT
+    for j in STAMP MEASUREMENT
     do
         vname="${j}_V${i}"
         overheads[${vname}]=$( grep ${vname}: $OVERHEADFILE | awk '{print $2}' )
@@ -20,56 +42,23 @@ do
     echo ""
 done
 
-# produce .dat file
-python3 unpackdata.py $INPUT > ${INPUT}.dat
 
 # produce .dat.matched file
 awk -F, -f matchem.awk ${INPUT}.dat > ${INPUT}.dat.matched
 
-# .dat.matched file has format:
-#opflag,subid,val0,val1,val2,val3,val4,val5,val6,nested_measure_cnt,nested_stamp_cnt,nest_lvl
-# 1    , 2   ,  3 , 4  , 5  , 6  , 7  , 8  , 9  , 10               ,  11            , 12
-# walk through input file and adjust overheads
-# For each valn of each line, overhead is:
-#        valn - overheads[BASIC_Vn] - (nested_stamp_cnt * overheads[STAMP_Vn]) - (nested_measure_cnt * overheads[MEASUREMENT_Vn])
-
-awk -F, \
-'{
-    if ( ($1 == 8) || ($1 < 0 ) || ($1 > 99))
-    {
-        printf("%s\n",$0);
-    }
-    else
-    {
-              printf("%d,%d,",$1,$2);
-              printf("%.3f,", $3 - '${overheads[BASIC_V0]}' - \
-                                   ($11 * '${overheads[STAMP_V0]}') - \
-                                   ($10 *  '${overheads[MEASUREMENT_V0]}'));
-
-              printf("%.3f,", $4 - '${overheads[BASIC_V1]}' - \
-                                   ($11 * '${overheads[STAMP_V1]}') - \
-                                   ($10 *  '${overheads[MEASUREMENT_V1]}'));
-
-              printf("%.3f,", $5 - '${overheads[BASIC_V2]}' - \
-                                   ($11 * '${overheads[STAMP_V2]}') - \
-                                   ($10 *  '${overheads[MEASUREMENT_V2]}'));
-
-              printf("%.3f,", $6 - '${overheads[BASIC_V3]}' - \
-                                   ($11 * '${overheads[STAMP_V3]}') - \
-                                   ($10 *  '${overheads[MEASUREMENT_V3]}'));
-
-              printf("%.3f,", $7 - '${overheads[BASIC_V4]}' - \
-                                   ($11 * '${overheads[STAMP_V4]}') - \
-                                   ($10 *  '${overheads[MEASUREMENT_V4]}'));
-
-              printf("%.3f,", $8 - '${overheads[BASIC_V5]}' - \
-                                   ($11 * '${overheads[STAMP_V5]}') - \
-                                   ($10 *  '${overheads[MEASUREMENT_V5]}'));
-
-              printf("%.3f,", $9 - '${overheads[BASIC_V6]}' - \
-                                   ($11 * '${overheads[STAMP_V6]}') - \
-                                   ($10 *  '${overheads[MEASUREMENT_V6]}'));
-
-              printf("%d,%d,%d\n",$10,$11,$12);
-    }
-}'  ${INPUT}.dat.matched >  ${INPUT}.dat.matched.adjusted
+# produce .dat.matched.adjusted file
+awk -F, -v v0_measure_oh=${overheads[MEASUREMENT_V0]} \
+        -v v0_stamp_oh=${overheads[STAMP_V0]} \
+        -v v1_measure_oh=${overheads[MEASUREMENT_V1]} \
+        -v v1_stamp_oh=${overheads[STAMP_V1]} \
+        -v v2_measure_oh=${overheads[MEASUREMENT_V2]} \
+        -v v2_stamp_oh=${overheads[STAMP_V2]} \
+        -v v3_measure_oh=${overheads[MEASUREMENT_V3]} \
+        -v v3_stamp_oh=${overheads[STAMP_V3]} \
+        -v v4_measure_oh=${overheads[MEASUREMENT_V4]} \
+        -v v4_stamp_oh=${overheads[STAMP_V4]} \
+        -v v5_measure_oh=${overheads[MEASUREMENT_V5]} \
+        -v v5_stamp_oh=${overheads[STAMP_V5]} \
+        -v v6_measure_oh=${overheads[MEASUREMENT_V6]} \
+        -v v6_stamp_oh=${overheads[STAMP_V6]} \
+       -f matchem.awk ${INPUT}.dat > ${INPUT}.dat.matched.adjusted

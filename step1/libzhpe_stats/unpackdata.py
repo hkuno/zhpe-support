@@ -27,7 +27,7 @@ class Record(Structure):
              ]
 
 def printMetadata(m):
-    print('profileid:{}, perf_typeid:{}, val0:rdtscp'.format(m.profileid,m.perf_typeid), end='')
+    print('profileid: {} , perf_typeid: {} , val0:rdtscp'.format(m.profileid,m.perf_typeid), end='')
     for i in range(m.config_count):
         print(',val{}_config:{}'.format(i+1,hex(m.config_list[i])), end='')
     print('')
