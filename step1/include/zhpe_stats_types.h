@@ -127,14 +127,6 @@ struct zhpe_stats_ops {
     void                   (*saveme)(char *dest, char *src);
 };
 
-/* Ultimately these should be moved to other repos. */
-enum {
-    ZHPE_STATS_SUBID_RECV        = 20,
-    ZHPE_STATS_SUBID_RMA         = 30,
-    ZHPE_STATS_SUBID_SEND        = 40,
-    ZHPE_STATS_SUBID_ZHPQ        = 50,
-};
-
 /* op ids: keep in sync with processing scripts */
 enum {
     ZHPE_STATS_START             = 1,
@@ -201,6 +193,15 @@ enum {
     CPL1_EXEC_INST_TOTAL    =2,
     CPL2_EXEC_INST_TOTAL    =3,
     CPL3_EXEC_INST_TOTAL    =4,
+};
+
+/* Ultimately these should be moved to other repos. */
+enum {
+    ZHPE_STATS_SUBID_SEND        = 10,
+    ZHPE_STATS_SUBID_RECV        = 20,
+    ZHPE_STATS_SUBID_RMA         = 30,
+    ZHPE_STATS_SUBID_ZHPQ        = 40,
+    ZHPE_STATS_SUBID_MPI         = 50,
 };
 
 _EXTERN_C_END

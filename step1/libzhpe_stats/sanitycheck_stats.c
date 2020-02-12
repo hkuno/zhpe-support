@@ -93,7 +93,7 @@ static void usage(char * arg0)
 int main(int argc, char **argv)
 {
     bool  ret = 1;
-    int   A[1000];
+//    int   A[1000];
 
     if (argc != 3) {
         usage(argv[0]);
@@ -109,39 +109,41 @@ int main(int argc, char **argv)
 
     zhpe_stats_open(8);
 
-    zhpe_stats_start(ZHPE_STATS_SUBID_S_DCA_S);
-    A[0]=1;
-    zhpe_stats_stop(ZHPE_STATS_SUBID_S_DCA_S);
-
-    zhpe_stats_start(ZHPE_STATS_SUBID_S_DCA_S);
-    zhpe_stats_start(ZHPE_STATS_SUBID_STARTSTOP);
-    A[75]=1;
-    zhpe_stats_stop(ZHPE_STATS_SUBID_STARTSTOP);
-    zhpe_stats_stop(ZHPE_STATS_SUBID_S_DCA_S);
-
-    zhpe_stats_start(ZHPE_STATS_SUBID_S_DCA_S);
-    zhpe_stats_start(ZHPE_STATS_SUBID_STARTSTOP);
-    zhpe_stats_start(ZHPE_STATS_SUBID_STARTSTOP);
-    A[150]=1;
-    zhpe_stats_stop(ZHPE_STATS_SUBID_STARTSTOP);
-    zhpe_stats_stop(ZHPE_STATS_SUBID_STARTSTOP);
-    zhpe_stats_stop(ZHPE_STATS_SUBID_S_DCA_S);
-
-    zhpe_stats_start(ZHPE_STATS_SUBID_S_DCA_S);
-    zhpe_stats_start(ZHPE_STATS_SUBID_STARTSTOP);
-    zhpe_stats_start(ZHPE_STATS_SUBID_STARTSTOP);
-    zhpe_stats_start(ZHPE_STATS_SUBID_STARTSTOP);
-    A[150]=1;
-    zhpe_stats_stop(ZHPE_STATS_SUBID_STARTSTOP);
-    zhpe_stats_stop(ZHPE_STATS_SUBID_STARTSTOP);
-    zhpe_stats_stop(ZHPE_STATS_SUBID_STARTSTOP);
-    zhpe_stats_stop(ZHPE_STATS_SUBID_S_DCA_S);
-    if (A[0] == 0)
-        printf("foobar\n");
-
+    zhpe_stats_start(1);
+    zhpe_stats_start(2);
+    zhpe_stats_start(3);
+    zhpe_stats_stamp(1,1,1,1,1,1,1);
+    zhpe_stats_start(4);
+    zhpe_stats_start(5);
+    zhpe_stats_pause_all();
+    zhpe_stats_restart_all();
     zhpe_stats_stop_all();
-    zhpe_stats_close();
 
+
+    zhpe_stats_start(1);
+    zhpe_stats_start(2);
+    zhpe_stats_start(3);
+    zhpe_stats_start(4);
+    zhpe_stats_start(5);
+    zhpe_stats_stop(5);
+    zhpe_stats_stop(4);
+    zhpe_stats_stop(3);
+    zhpe_stats_stop(2);
+    zhpe_stats_stop(1);
+
+    zhpe_stats_start(1);
+    zhpe_stats_start(2);
+    zhpe_stats_start(3);
+    zhpe_stats_pause_all();
+    zhpe_stats_stop_all();
+    zhpe_stats_start(4);
+    zhpe_stats_start(5);
+    zhpe_stats_restart_all();
+    zhpe_stats_stop(5);
+    zhpe_stats_stop(4);
+
+    zhpe_stats_start(6);
+    zhpe_stats_close();
     zhpe_stats_finalize();
 
     ret = 0;
