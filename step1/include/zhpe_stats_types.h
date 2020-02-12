@@ -59,7 +59,7 @@ enum {
     DISPATCH_RESOURCE_STALL_CYCLES1                 = 0xAE,
     RAW_PERF_COUNT_HW_RETIRED_INSTRUCTIONS          = 0xC0,
     RAW_PERF_COUNT_HW_CPU_CYCLES                    = 0x76,
-    RAW_PERF_COUNT_HW_RETIRED_BRANCH_INSTRUCTIONS   = 0xC2,
+    RAW_PERF_COUNT_HW_RETIRED_BRANCH_INSTRUCTIONS   = 0xD1,
     RAW_PERF_COUNT_HW_BRANCH_MISSES                 = 0xC3,
 
 /* DC cache group */
@@ -113,6 +113,8 @@ struct zhpe_stats_record {
 struct zhpe_stats_ops {
     void                   (*open)(uint16_t uid);
     void                   (*close)(void);
+    void                   (*enable)(void);
+    void                   (*disable)(void);
     void                   (*pause_all)();
     void                   (*restart_all)();
     void                   (*stop_all)();

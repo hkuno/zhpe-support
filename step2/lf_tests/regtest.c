@@ -90,7 +90,7 @@ static int do_reg(const struct args *args)
             fi_close(&mr->fid);
         }
         /* Gathering statistics, local+remote. */
-//        zhpe_stats_enable();
+        zhpe_stats_enable();
         for (i = 0; i < args->iterations; i++)  {
             zhpe_stats_start(10);
             ret = fi_mr_reg(fab_dom.domain, buf, size, lcl_acc | rem_acc,
@@ -104,7 +104,7 @@ static int do_reg(const struct args *args)
             fi_close(&mr->fid);
             zhpe_stats_stop(20);
         }
- //       zhpe_stats_disable();
+        zhpe_stats_disable();
         /* Warmups, local only. */
         for (i = 0; i < 10; i++) {
             ret = fi_mr_reg(fab_dom.domain, buf, buf_size, lcl_acc,
@@ -116,7 +116,7 @@ static int do_reg(const struct args *args)
             fi_close(&mr->fid);
         }
         /* Gathering statistics, local only. */
-//        zhpe_stats_enable();
+        zhpe_stats_enable();
         for (i = 0; i < args->iterations; i++)  {
             zhpe_stats_start(30);
             ret = fi_mr_reg(fab_dom.domain, buf, size, lcl_acc,
@@ -130,7 +130,7 @@ static int do_reg(const struct args *args)
             fi_close(&mr->fid);
             zhpe_stats_stop(40);
         }
-//        zhpe_stats_disable();
+        zhpe_stats_disable();
     }
  done:
     if (buf)

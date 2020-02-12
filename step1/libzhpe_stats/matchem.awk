@@ -230,7 +230,75 @@
                         nest_measure_cnt[nestlvl] = 0;
                         nest_stamp_cnt[nestlvl] = 0;
                     }
-                    pausedlen=0;
+                    if (pausedlen > 0)
+                    {
+                        printf("# CLEARING PAUSED: %d\n",pausedlen);
+
+                        if (nestlvl > 0)
+                        for ( i=0; i < nestlvl; i++)
+                            nest_measure_cnt[i]++;
+
+                        for ( i=pausedlen-1; i >= 0; i-- )
+                        {
+                            cursubid = paused[i];
+                            stack[stacklen++] = cursubid;
+                            if  (cursubid in ndata)
+                            {
+                               cur = ndata[cursubid] + 1;
+                            }
+                            else
+                            {
+                                cur = 0;
+                            }
+                            ndata[cursubid] = cur;
+                            data0[cursubid][cur]=$3 - psave0[i];
+                            data1[cursubid][cur]=$4 - psave1[i];
+                            data2[cursubid][cur]=$5 - psave2[i];
+                            data3[cursubid][cur]=$6 - psave3[i];
+                            data4[cursubid][cur]=$7 - psave4[i];
+                            data5[cursubid][cur]=$8 - psave5[i];
+                            data6[cursubid][cur]=$9 - psave6[i];
+                            nestlvl++;
+                        }
+                        pausedlen=0;
+
+                        while ( stacklen > 0 )
+                        {
+                            stacklen--;
+                            nestlvl--;
+                            cursubid = stack[stacklen];
+                            cur = ndata[cursubid];
+                            ndata[cursubid] = cur - 1;
+                            printf("%s,%s,", ZHPE_STOP_ALL, cursubid);
+                            printf("%d,", $3 - data0[cursubid][cur] - \
+                                            ((nest_stamp_cnt[nestlvl] * v0_stamp_oh) + \
+                                            (nest_measure_cnt[nestlvl] * v0_measure_oh)));
+                            printf("%d,", $4 - data1[cursubid][cur] - \
+                                            ((nest_stamp_cnt[nestlvl] * v1_stamp_oh) + \
+                                            (nest_measure_cnt[nestlvl] * v1_measure_oh)));
+                            printf("%d,", $5 - data2[cursubid][cur] - \
+                                            ((nest_stamp_cnt[nestlvl] * v2_stamp_oh) + \
+                                            (nest_measure_cnt[nestlvl] * v2_measure_oh)));
+                            printf("%d,", $6 - data3[cursubid][cur] - \
+                                            ((nest_stamp_cnt[nestlvl] * v3_stamp_oh) + \
+                                            (nest_measure_cnt[nestlvl] * v3_measure_oh)));
+                            printf("%d,", $7 - data4[cursubid][cur] - \
+                                            ((nest_stamp_cnt[nestlvl] * v4_stamp_oh) + \
+                                            (nest_measure_cnt[nestlvl] * v4_measure_oh)));
+                            printf("%d,", $8 - data5[cursubid][cur] - \
+                                            ((nest_stamp_cnt[nestlvl] * v5_stamp_oh) + \
+                                            (nest_measure_cnt[nestlvl] * v5_measure_oh)));
+                            printf("%d,", $9 - data6[cursubid][cur] - \
+                                            ((nest_stamp_cnt[nestlvl] * v6_stamp_oh) + \
+                                            (nest_measure_cnt[nestlvl] * v6_measure_oh)));
+                            printf("%d,", nest_measure_cnt[nestlvl]);
+                            printf("%d,", nest_stamp_cnt[nestlvl]);
+                            printf("%d,", nestlvl);
+                            printf("\n");
+                            nest_measure_cnt[nestlvl] = 0;
+                            nest_stamp_cnt[nestlvl] = 0;
+                        }
+                    }
                 }
                 else
                 {

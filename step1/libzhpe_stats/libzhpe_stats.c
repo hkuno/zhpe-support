@@ -158,6 +158,8 @@ static void stats_minimal_open(uint16_t uid);
 static struct zhpe_stats_ops zhpe_stats_nops = {
     .open               = stats_minimal_open,
     .close              = stats_nop_void,
+    .enable             = stats_nop_void,
+    .disable            = stats_nop_void,
     .pause_all          = stats_nop_void,
     .restart_all        = stats_nop_void,
     .stop_all           = stats_nop_void,
@@ -171,6 +173,8 @@ static struct zhpe_stats_ops zhpe_stats_nops = {
 
 
 __thread struct zhpe_stats_ops *zhpe_stats_ops = &zhpe_stats_nops;
+__thread struct zhpe_stats_ops *saved_zhpe_stats_ops = &zhpe_stats_nops;
+__thread struct zhpe_stats_ops *disabled_zhpe_stats_ops = &zhpe_stats_nops;
 
 __thread struct zhpe_stats *zhpe_stats = NULL;
 
@@ -195,6 +199,27 @@ __u32 perf_typeid=0;
 
 /* forward declarations */
 void zhpe_stats_flush();
+
+static void stats_cmn_enable(void)
+{
+    if (!zhpe_stats)
+        return;
+
+    zhpe_stats->enabled = true;
+    zhpe_stats_ops = saved_zhpe_stats_ops;
+    zhpe_stats_restart_all();
+}
+
+static void stats_cmn_disable(void)
+{
+    zhpe_stats_pause_all();
+    if (!zhpe_stats)
+        return;
+
+    zhpe_stats->enabled = false;
+    saved_zhpe_stats_ops = zhpe_stats_ops;
+    zhpe_stats_ops = disabled_zhpe_stats_ops;
+}
 
 static void stats_cmn_finalize(void)
 {
@@ -554,6 +579,8 @@ static void stats_stamp(uint32_t subid,
 static struct zhpe_stats_ops stats_ops_rdpmc = {
     .open               = stats_minimal_open,
     .close              = rdpmc_stats_close,
+    .enable             = stats_cmn_enable,
+    .disable            = stats_cmn_disable,
     .pause_all          = stats_pause_all,
     .restart_all        = stats_restart_all,
     .stop_all           = stats_stop_all,
@@ -565,11 +592,29 @@ static struct zhpe_stats_ops stats_ops_rdpmc = {
     .saveme             = stats_memcpy_saveme,
 };
 
+static struct zhpe_stats_ops stats_ops_rdpmc_disabled = {
+    .open               = stats_minimal_open,
+    .close              = rdpmc_stats_close,
+    .enable             = stats_cmn_enable,
+    .disable            = stats_cmn_disable,
+    .pause_all          = stats_nop_void,
+    .restart_all        = stats_nop_void,
+    .stop_all           = stats_nop_void,
+    .start              = stats_nop_uint32,
+    .stop               = stats_nop_uint32,
+    .finalize           = stats_finalize,
+    .stamp              = stats_nop_stamp,
+    .setvals            = stats_nop_setvals,
+    .saveme             = stats_nop_saveme,
+};
+
 static struct zhpe_stats_ops stats_ops_rdpmc_memcpy = {
     .open               = stats_minimal_open,
     .close              = rdpmc_stats_close,
+    .enable             = stats_cmn_enable,
+    .disable            = stats_cmn_disable,
     .pause_all          = stats_pause_all,
-    .restart_all         = stats_restart_all,
+    .restart_all        = stats_restart_all,
     .stop_all           = stats_stop_all_memcpy,
     .start              = stats_start_memcpy,
     .stop               = stats_stop_memcpy,
@@ -579,9 +624,27 @@ static struct zhpe_stats_ops stats_ops_rdpmc_memcpy = {
     .saveme             = stats_memcpy_saveme,
 };
 
+static struct zhpe_stats_ops stats_ops_hpe_sim_disabled = {
+    .open               = stats_minimal_open,
+    .close              = sim_stats_close,
+    .enable             = stats_cmn_enable,
+    .disable            = stats_cmn_disable,
+    .pause_all          = stats_nop_void,
+    .restart_all        = stats_nop_void,
+    .stop_all           = stats_nop_void,
+    .start              = stats_nop_uint32,
+    .stop               = stats_nop_uint32,
+    .finalize           = stats_finalize,
+    .stamp              = stats_stamp,
+    .setvals            = stats_setvals_hpe_sim,
+    .saveme             = stats_memcpy_saveme,
+};
+
 static struct zhpe_stats_ops stats_ops_hpe_sim = {
     .open               = stats_minimal_open,
     .close              = sim_stats_close,
+    .enable             = stats_cmn_enable,
+    .disable            = stats_cmn_disable,
     .pause_all          = stats_pause_all,
     .restart_all        = stats_restart_all,
     .stop_all           = stats_stop_all,
@@ -867,16 +930,22 @@ static void stats_minimal_open(uint16_t uid)
     switch(zhpe_stats_profile) {
 
         case ZHPE_STATS_CARBON:
-                                    zhpe_stats_ops = &stats_ops_hpe_sim;
-                                    stats_sim_open(uid);
-                                    break;
+                                zhpe_stats_ops = &stats_ops_hpe_sim;
+                                saved_zhpe_stats_ops = &stats_ops_hpe_sim;
+                                disabled_zhpe_stats_ops = &stats_ops_hpe_sim_disabled;
+                                stats_sim_open(uid);
+                                break;
         case ZHPE_STATS_CPU:
         case ZHPE_STATS_CACHE:
-                                    zhpe_stats_ops = &stats_ops_rdpmc;
-                                    break;
+                                zhpe_stats_ops = &stats_ops_rdpmc;
+                                saved_zhpe_stats_ops = &stats_ops_rdpmc;
+                                disabled_zhpe_stats_ops = &stats_ops_rdpmc_disabled;
+                                break;
         case ZHPE_STATS_CACHE_ALT:
-                                    zhpe_stats_ops = &stats_ops_rdpmc_memcpy;
-                                    break;
+                                zhpe_stats_ops = &stats_ops_rdpmc_memcpy;
+                                saved_zhpe_stats_ops = &stats_ops_rdpmc_memcpy;
+                                disabled_zhpe_stats_ops = &stats_ops_rdpmc_disabled;
+                                break;
         default:
                   print_func_err(__func__, __LINE__,
                        "zhpe_stats_profile is not set", "", -1);
