@@ -134,6 +134,11 @@
                 if ( cursubid != $2 )
                 {
                     printf("# unmatched stop %d != %d\n",cursubid2, $2);
+                    if (nestlvl > 0)
+                    {
+                        for ( i=0; i< nestlvl; i++)
+                            nest_measure_cnt[i]++;
+                    }
                     stacklen++;
                     nestlvl++;
                 } else {
