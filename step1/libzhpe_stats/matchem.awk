@@ -115,6 +115,7 @@
             {
                 if ($1 == ZHPE_STOP_ALL)
                 {
+                    printf("# STOP_ALL %d\n",stacklen);
                     while ( stacklen > 0 )
                     {
                         stacklen--;
@@ -137,6 +138,7 @@
                         nested_measurement_count[nestlvl] = 0;
                         nested_stamp_count[nestlvl] = 0;
                     }
+                    pausedlen=0;
                 }
                 else
                 {
@@ -180,6 +182,10 @@
                     if ($1 == ZHPE_RESTART_ALL)
                     {
                         printf("# Restarting %d\n",pausedlen);
+                        if (nestlvl > 0)
+                        for ( i=0; i < nestlvl; i++)
+                            nested_measurement_count[i]++;
+
                         for ( i=pausedlen-1; i >= 0; i-- )
                         {
                             cursubid = paused[i];
@@ -220,24 +226,28 @@
              } } } } } }
   }
   END {
-        while ( stacklen > 0 )
-        {
-            stacklen--;
-            cursubid = stack[stacklen];
-            cur = ndata[cursubid];
-            ndata[cursubid] = cur - 1;
-            printf("%s,%s,", $1, $2);
-            printf("%d,", $3 - data0[cursubid][cur]);
-            printf("%d,", $4 - data1[cursubid][cur]);
-            printf("%d,", $5 - data2[cursubid][cur]);
-            printf("%d,", $6 - data3[cursubid][cur]);
-            printf("%d,", $7 - data4[cursubid][cur]);
-            printf("%d,", $8 - data5[cursubid][cur]);
-            printf("%d,", $9 - data6[cursubid][cur]);
-            printf("%d,", nested_measurement_count[nestlvl]);
-            printf("%d,", nested_stamp_count[nestlvl]);
-            printf("%d,", nestlvl);
-            printf("\n");
-            nestlvl--;
-        }
+          printf("# END: %d\n",stacklen);
+          while ( stacklen > 0 )
+          {
+              stacklen--;
+              nestlvl--;
+              cursubid = stack[stacklen];
+              cur = ndata[cursubid];
+              ndata[cursubid] = cur - 1;
+              printf("%s,%s,", ZHPE_STOP_ALL, cursubid);
+              printf("%d,", $3 - data0[cursubid][cur]);
+              printf("%d,", $4 - data1[cursubid][cur]);
+              printf("%d,", $5 - data2[cursubid][cur]);
+              printf("%d,", $6 - data3[cursubid][cur]);
+              printf("%d,", $7 - data4[cursubid][cur]);
+              printf("%d,", $8 - data5[cursubid][cur]);
+              printf("%d,", $9 - data6[cursubid][cur]);
+              printf("%d,", nested_measurement_count[nestlvl] - 1);
+              printf("%d,", nested_stamp_count[nestlvl]);
+              printf("%d,", nestlvl);
+              printf("\n");
+              nested_measurement_count[nestlvl] = 0;
+              nested_stamp_count[nestlvl] = 0;
+          }
+          pausedlen=0;
    }
