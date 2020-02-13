@@ -89,6 +89,16 @@ static inline void zhpe_stats_stop(uint32_t subid)
     zhpe_stats_ops->stop(subid);
 }
 
+static inline void zhpe_stats_enable(void)
+{
+    zhpe_stats_ops->enable();
+}
+
+static inline void zhpe_stats_disable(void)
+{
+    zhpe_stats_ops->disable();
+}
+
 static inline void zhpe_stats_stamp(uint32_t subid,
                                     uint64_t d1,
                                     uint64_t d2,
@@ -121,6 +131,8 @@ static inline bool zhpe_stats_init(const char *stats_dir,
 #define zhpe_stats_stop_all()           do {} while (0)
 #define zhpe_stats_start(subid)         do {} while (0)
 #define zhpe_stats_stop(subid)          do {} while (0)
+#define zhpe_stats_enable()             do {} while (0)
+#define zhpe_stats_disable()            do {} while (0)
 #define zhpe_stats_stamp(_subid, _v1, _v2, _v3, _v4, _v5, _v6)   do {} while (0)
 #define zhpe_stats_subid(_name, _id)
 

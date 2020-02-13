@@ -142,7 +142,20 @@ int main(int argc, char **argv)
     zhpe_stats_stop(5);
     zhpe_stats_stop(4);
 
+    zhpe_stats_disable();
+    zhpe_stats_start(11);
+    zhpe_stats_start(12);
+    zhpe_stats_stop(12);
+    zhpe_stats_stop(11);
+    zhpe_stats_enable();
+
+    zhpe_stats_start(14);
+    zhpe_stats_start(15);
+    zhpe_stats_stop(15);
+    zhpe_stats_stop(14);
+
     zhpe_stats_start(6);
+
     zhpe_stats_close();
     zhpe_stats_finalize();
 

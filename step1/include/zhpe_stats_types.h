@@ -113,6 +113,8 @@ struct zhpe_stats_record {
 struct zhpe_stats_ops {
     void                   (*open)(uint16_t uid);
     void                   (*close)(void);
+    void                   (*enable)(void);
+    void                   (*disable)(void);
     void                   (*pause_all)();
     void                   (*restart_all)();
     void                   (*stop_all)();

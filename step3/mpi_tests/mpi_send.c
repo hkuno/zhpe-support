@@ -40,12 +40,6 @@
 
 #include <zhpe_stats.h>
 
-#define NOP1    \
-do {            \
-    nop();      \
-} while (0)
-
-
 int main(int argc, char **argv)
 {
     int                 ret = 1;
@@ -67,27 +61,10 @@ int main(int argc, char **argv)
         zhpe_stats_init(argv[3], argv[4]);
         zhpe_stats_test(0);
         zhpe_stats_open(1);
+        zhpe_stats_enable();
         zhpe_stats_start(0);
         zhpe_stats_start(10);
-
-    zhpe_stats_start(88);
-    zhpe_stats_stop(88);
-    zhpe_stats_start(89);
-    NOP1;
-    zhpe_stats_stop(89);
-
-    zhpe_stats_start(90);
-    NOP1;
-    NOP1;
-    NOP1;
-    NOP1;
-    NOP1;
-    NOP1;
-    NOP1;
-    NOP1;
-    NOP1;
-    NOP1;
-    zhpe_stats_stop(90);
+        zhpe_stats_disable();
     }
 
     if (MPI_Init(&argc, &argv) != MPI_SUCCESS)
@@ -115,27 +92,10 @@ int main(int argc, char **argv)
         goto done;
     }
 
+    zhpe_stats_enable();
     zhpe_stats_stop(10);
     zhpe_stats_start(20);
-
-    zhpe_stats_start(88);
-    zhpe_stats_stop(88);
-    zhpe_stats_start(89);
-    NOP1;
-    zhpe_stats_stop(89);
-
-    zhpe_stats_start(90);
-    NOP1;
-    NOP1;
-    NOP1;
-    NOP1;
-    NOP1;
-    NOP1;
-    NOP1;
-    NOP1;
-    NOP1;
-    NOP1;
-    zhpe_stats_stop(90);
+    zhpe_stats_disable();
 
     if (!n_rank) {
         if (n_proc != 2) {
@@ -144,6 +104,7 @@ int main(int argc, char **argv)
         }
         printf("loops %Lu size %Lu\n", (ullong)loops, (ullong)size);
 
+        zhpe_stats_enable();
         for (i = 0; i < loops; i++) {
             zhpe_stats_start(100);
             if (MPI_Send(buf, size, MPI_BYTE, 1, 0, MPI_COMM_WORLD)
@@ -156,6 +117,7 @@ int main(int argc, char **argv)
                 goto done;
             zhpe_stats_stop(110);
         }
+        zhpe_stats_disable();
         MPI_Barrier(MPI_COMM_WORLD);
     }
     else {
@@ -171,8 +133,10 @@ int main(int argc, char **argv)
     }
     ret = 0;
 
+    zhpe_stats_enable();
     zhpe_stats_stop(20);
     zhpe_stats_start(30);
+    zhpe_stats_disable();
 
  done:
     if (buf)
@@ -181,6 +145,7 @@ int main(int argc, char **argv)
     if (ret)
         fprintf(stderr, "error\n");
 
+    zhpe_stats_enable();
     zhpe_stats_stop_all();
     zhpe_stats_close();
     zhpe_stats_finalize();

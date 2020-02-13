@@ -311,10 +311,11 @@ int main(int argc, char **argv)
 
     zhpe_stats_open(1);
 
-    SS100;
-    S_STARTSTOP_S100;
+    SS1000;
 
-    S_STAMP_S100;
+    S_STARTSTOP_S1000;
+
+    S_STAMP_S1000;
 
     zhpe_stats_close();
 
