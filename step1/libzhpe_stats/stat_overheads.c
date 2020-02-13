@@ -313,9 +313,10 @@ int main(int argc, char **argv)
 
     SS1000;
 
+    S_STAMP_S1000;
+
     S_STARTSTOP_S1000;
 
-    S_STAMP_S1000;
 
     zhpe_stats_close();
 

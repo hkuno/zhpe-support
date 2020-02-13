@@ -275,6 +275,27 @@ static uint64_t do_rdtscp()
     return ((uint64_t)hi << 32 | lo);
 }
 
+static void stats_setvals_just1_rdpmc(struct zhpe_stats_record *rec)
+{
+    unsigned int cnt1low, cnt1high;
+
+    rec->val0 = do_rdtscp();
+    rdpmc(zhpe_stats_cntr_list[0], cnt1low, cnt1high);
+    rec->val1 = (((long long)cnt1low) | ((long long)cnt1high ) << 32);
+}
+
+static void stats_setvals_2_rdpmc(struct zhpe_stats_record *rec)
+{
+    unsigned int cnt1low, cnt1high;
+    unsigned int cnt2low, cnt2high;
+
+    rec->val0 = do_rdtscp();
+    rdpmc(zhpe_stats_cntr_list[0], cnt1low, cnt1high);
+    rec->val1 = (((long long)cnt1low) | ((long long)cnt1high ) << 32);
+    rdpmc(zhpe_stats_cntr_list[1], cnt2low, cnt2high);
+    rec->val2 = (((long long)cnt2low) | ((long long)cnt2high ) << 32);
+}
+
 static void stats_setvals_6_rdpmc(struct zhpe_stats_record *rec)
 {
     unsigned int cnt1low, cnt1high;
@@ -286,17 +307,17 @@ static void stats_setvals_6_rdpmc(struct zhpe_stats_record *rec)
 
     rec->val0 = do_rdtscp();
     rdpmc(zhpe_stats_cntr_list[0], cnt1low, cnt1high);
-    rec->val1 = ((long long)cnt1low) | ((long long)cnt1high ) << 32;
+    rec->val1 = (((long long)cnt1low) | ((long long)cnt1high ) << 32);
     rdpmc(zhpe_stats_cntr_list[1], cnt2low, cnt2high);
-    rec->val2 = ((long long)cnt2low) | ((long long)cnt2high ) << 32;
+    rec->val2 = (((long long)cnt2low) | ((long long)cnt2high ) << 32);
     rdpmc(zhpe_stats_cntr_list[2], cnt3low, cnt3high);
-    rec->val3 = ((long long)cnt3low) | ((long long)cnt3high ) << 32;
+    rec->val3 = (((long long)cnt3low) | ((long long)cnt3high ) << 32);
     rdpmc(zhpe_stats_cntr_list[3], cnt4low, cnt4high);
-    rec->val4 = ((long long)cnt4low) | ((long long)cnt4high ) << 32;
+    rec->val4 = (((long long)cnt4low) | ((long long)cnt4high ) << 32);
     rdpmc(zhpe_stats_cntr_list[4], cnt5low, cnt5high);
-    rec->val5 = ((long long)cnt5low) | ((long long)cnt5high ) << 32;
+    rec->val5 = (((long long)cnt5low) | ((long long)cnt5high ) << 32);
     rdpmc(zhpe_stats_cntr_list[5], cnt6low, cnt6high);
-    rec->val6 = ((long long)cnt6low) | ((long long)cnt6high ) << 32;
+    rec->val6 = (((long long)cnt6low) | ((long long)cnt6high ) << 32);
 }
 
 static void stats_setvals_hpe_sim(struct zhpe_stats_record *rec)
@@ -314,7 +335,7 @@ static void stats_setvals_hpe_sim(struct zhpe_stats_record *rec)
     if (ret)
     {
         print_func_err(__func__, __LINE__, "sim_api_data_rec",
-                       "DATA_REC_PAUSE", ret);
+                       "DATA_REC_PAUSE", -ret);
         abort();
     }
 
@@ -328,7 +349,7 @@ static void stats_setvals_hpe_sim(struct zhpe_stats_record *rec)
     if (ret)
     {
         print_func_err(__func__, __LINE__, "sim_api_data_rec",
-                       "DATA_REC_START", ret);
+                       "DATA_REC_START", -ret);
         abort();
     }
 }
@@ -484,7 +505,7 @@ static void sim_stats_close()
                                        (uintptr_t)zhpe_stats->sim_buf);
     if (ret)
         print_func_err(__func__, __LINE__, "sim_api_data_rec",
-                       "DATA_REC_END", ret);
+                       "DATA_REC_END", -ret);
     zhpe_stats_flush(zhpe_stats);
     stats_close();
 }
@@ -495,6 +516,7 @@ void stats_finalize()
 
     for (int i=0;i<zhpe_stats_num_counters;i++)
     {
+        printf("At finalize: zhpe_stats_cntr_list[%d] = %lxu\n",i, zhpe_stats_cntr_list[i]);
         if (zhpe_stats_fd_list[i] != -1)
         {
            close(zhpe_stats_fd_list[i]);
@@ -592,6 +614,38 @@ static struct zhpe_stats_ops stats_ops_rdpmc = {
     .saveme             = stats_memcpy_saveme,
 };
 
+static struct zhpe_stats_ops stats_ops_rdpmc_just1val = {
+    .open               = stats_minimal_open,
+    .close              = rdpmc_stats_close,
+    .enable             = stats_cmn_enable,
+    .disable            = stats_cmn_disable,
+    .pause_all          = stats_pause_all,
+    .restart_all        = stats_restart_all,
+    .stop_all           = stats_stop_all,
+    .start              = stats_start,
+    .stop               = stats_stop,
+    .finalize           = stats_finalize,
+    .stamp              = stats_stamp,
+    .setvals            = stats_setvals_just1_rdpmc,
+    .saveme             = stats_memcpy_saveme,
+};
+
+static struct zhpe_stats_ops stats_ops_rdpmc_2vals = {
+    .open               = stats_minimal_open,
+    .close              = rdpmc_stats_close,
+    .enable             = stats_cmn_enable,
+    .disable            = stats_cmn_disable,
+    .pause_all          = stats_pause_all,
+    .restart_all        = stats_restart_all,
+    .stop_all           = stats_stop_all,
+    .start              = stats_start,
+    .stop               = stats_stop,
+    .finalize           = stats_finalize,
+    .stamp              = stats_stamp,
+    .setvals            = stats_setvals_2_rdpmc,
+    .saveme             = stats_memcpy_saveme,
+};
+
 static struct zhpe_stats_ops stats_ops_rdpmc_disabled = {
     .open               = stats_minimal_open,
     .close              = rdpmc_stats_close,
@@ -669,7 +723,7 @@ static void init_rdpmc_profile(__u32 petype, int count, ...)
 
     int         err;
     void        *addr;
-    uint64_t    index, offset;
+    uint64_t    index;
     __u64       peconfig;
 
     struct perf_event_mmap_page * buf;
@@ -684,35 +738,35 @@ static void init_rdpmc_profile(__u32 petype, int count, ...)
         pe.config = peconfig;
         pe.exclude_kernel = 1;
 
-        zhpe_stats_config_list[zhpe_stats_num_counters] = peconfig;
+        zhpe_stats_config_list[i] = peconfig;
 
-        zhpe_stats_fd_list[zhpe_stats_num_counters] =
-                                        my_perf_event_open(&pe, 0, -1, -1, 0);
-        if (zhpe_stats_fd_list[zhpe_stats_num_counters] < 0) {
-            err = errno;
+        zhpe_stats_fd_list[i] = my_perf_event_open(&pe, 0, -1, -1, 0);
+        if (zhpe_stats_fd_list[i] < 0) {
+            err = -errno;
             print_func_err(__func__, __LINE__, "perf_event_open fail", "", err);
             exit(EXIT_FAILURE);
         }
 
         addr = mmap(NULL, 4096, PROT_READ, MAP_SHARED,
-                    zhpe_stats_fd_list[zhpe_stats_num_counters], 0);
-        if (addr == (void *)(-1)) {
-            err = errno;
+                    zhpe_stats_fd_list[i], 0);
+        if (addr == MAP_FAILED) {
+            err = -errno;
             print_func_err(__func__, __LINE__, "mmap() syscall fail", "", err);
             exit(EXIT_FAILURE);
         }
 
         buf = (struct perf_event_mmap_page *) addr;
         index = buf->index;
-        if (index < 0) {
-            print_func_err(__func__, __LINE__, "bad buf->index", "", err);
+        if (index == 0) {
+            print_err("Error: %s, %d, bad buf->index\n", __func__, __LINE__);
             exit(EXIT_FAILURE);
         }
-        offset = buf->offset;
-
-        zhpe_stats_cntr_list[zhpe_stats_num_counters++] = index + offset;
+        zhpe_stats_cntr_list[i] = index - 1;
+        printf("At open: zhpe_stats_cntr_list[%d] = %lxu\n",i, index);
     }
+    zhpe_stats_num_counters = count;
     va_end(args);
+/* todo: check for prctl error */
     prctl(PR_TASK_PERF_EVENTS_ENABLE);
 }
 
@@ -723,15 +777,15 @@ static void stats_common_open(uint16_t uid)
 
     if (zhpe_stats_profile == 0)
     {
-        print_func_err(__func__, __LINE__,
-                       "zhpe_stats_profile is NULL", "", -1);
+        print_err("%s:%d %s\n",__func__, __LINE__,
+                       "zhpe_stats_profile is NULL");
         abort();
     }
 
     if (zhpe_stats != NULL)
     {
-        print_func_err(__func__, __LINE__,
-                       "zhpe_stats_open called when already open", "", -1);
+        print_err("%s:%d %s\n",__func__, __LINE__,
+                       "zhpe_stats_open called when already open");
         abort();
     }
 
@@ -817,6 +871,28 @@ bool zhpe_stats_init(const char *stats_dir, const char *stats_unique)
             goto done;
         }
     } else {
+
+    if (!strcmp("just1cpu",tmp)) {
+            zhpe_stats_profile = ZHPE_STATS_CPU_JUST1;
+            perf_typeid = PERF_TYPE_RAW;
+            init_rdpmc_profile(PERF_TYPE_RAW, 1,
+                                RAW_PERF_COUNT_HW_RETIRED_INSTRUCTIONS);
+    } else {
+    if (!strcmp("just1hw",tmp)) {
+            zhpe_stats_profile = ZHPE_STATS_HW_JUST1;
+            perf_typeid = PERF_TYPE_HARDWARE;
+            init_rdpmc_profile(PERF_TYPE_HARDWARE, 1,
+                                PERF_COUNT_HW_INSTRUCTIONS
+                                );
+    } else {
+    if (!strcmp("hw",tmp)) {
+            zhpe_stats_profile = ZHPE_STATS_HW;
+            perf_typeid = PERF_TYPE_HARDWARE;
+            init_rdpmc_profile(PERF_TYPE_HARDWARE, 2,
+                                PERF_COUNT_HW_INSTRUCTIONS,
+                                PERF_COUNT_HW_CPU_CYCLES
+                                );
+    } else {
     if (!strcmp("cpu",tmp)) {
             zhpe_stats_profile = ZHPE_STATS_CPU;
             perf_typeid = PERF_TYPE_RAW;
@@ -857,7 +933,7 @@ bool zhpe_stats_init(const char *stats_dir, const char *stats_unique)
             print_err("%s,%u: Disabling zhpe-stats.\n", __func__, __LINE__);
             zhpe_stats_profile = ZHPE_STATS_DISABLED;
         }
-    }}}}
+    }}}}}}}
 
     zhpe_stats_buf_count=0;
     tmp = getenv("ZHPE_STATS_BUF_COUNT");
@@ -905,7 +981,7 @@ static void stats_sim_open(uint16_t uid)
                                       (uintptr_t)&len);
     if (ret) {
         print_func_err(__func__, __LINE__, "sim_api_data_rec",
-                       "DATA_REC_CREAT", ret);
+                       "DATA_REC_CREAT", -ret);
         abort();
     }
 
@@ -915,7 +991,7 @@ static void stats_sim_open(uint16_t uid)
     ret=sim_api_data_rec(DATA_REC_START, uid, (uintptr_t)zhpe_stats->sim_buf);
     if (ret) {
         print_func_err(__func__, __LINE__, "sim_api_data_rec",
-                       "DATA_REC_START", ret);
+                       "DATA_REC_START", -ret);
         abort();
     }
 }
@@ -930,25 +1006,40 @@ static void stats_minimal_open(uint16_t uid)
     switch(zhpe_stats_profile) {
 
         case ZHPE_STATS_CARBON:
-                                zhpe_stats_ops = &stats_ops_hpe_sim;
-                                saved_zhpe_stats_ops = &stats_ops_hpe_sim;
-                                disabled_zhpe_stats_ops = &stats_ops_hpe_sim_disabled;
-                                stats_sim_open(uid);
-                                break;
+                        zhpe_stats_ops = &stats_ops_hpe_sim;
+                        saved_zhpe_stats_ops = &stats_ops_hpe_sim;
+                        disabled_zhpe_stats_ops = &stats_ops_hpe_sim_disabled;
+                        stats_sim_open(uid);
+                        break;
+
+        case ZHPE_STATS_CPU_JUST1:
+        case ZHPE_STATS_HW_JUST1:
+                        zhpe_stats_ops = &stats_ops_rdpmc_just1val;
+                        saved_zhpe_stats_ops = &stats_ops_rdpmc_just1val;
+                        disabled_zhpe_stats_ops = &stats_ops_rdpmc_disabled;
+                            break;
+
+        case ZHPE_STATS_HW:
+                        zhpe_stats_ops = &stats_ops_rdpmc_2vals;
+                        saved_zhpe_stats_ops = &stats_ops_rdpmc_2vals;
+                        disabled_zhpe_stats_ops = &stats_ops_rdpmc_disabled;
+                        break;
+
         case ZHPE_STATS_CPU:
         case ZHPE_STATS_CACHE:
-                                zhpe_stats_ops = &stats_ops_rdpmc;
-                                saved_zhpe_stats_ops = &stats_ops_rdpmc;
-                                disabled_zhpe_stats_ops = &stats_ops_rdpmc_disabled;
-                                break;
+                        zhpe_stats_ops = &stats_ops_rdpmc;
+                        saved_zhpe_stats_ops = &stats_ops_rdpmc;
+                        disabled_zhpe_stats_ops = &stats_ops_rdpmc_disabled;
+                        break;
+
         case ZHPE_STATS_CACHE_ALT:
-                                zhpe_stats_ops = &stats_ops_rdpmc_memcpy;
-                                saved_zhpe_stats_ops = &stats_ops_rdpmc_memcpy;
-                                disabled_zhpe_stats_ops = &stats_ops_rdpmc_disabled;
-                                break;
+                        zhpe_stats_ops = &stats_ops_rdpmc_memcpy;
+                        saved_zhpe_stats_ops = &stats_ops_rdpmc_memcpy;
+                        disabled_zhpe_stats_ops = &stats_ops_rdpmc_disabled;
+                        break;
         default:
-                  print_func_err(__func__, __LINE__,
-                       "zhpe_stats_profile is not set", "", -1);
+                  print_err("%s:%d %s\n",__func__, __LINE__,
+                       "Error: zhpe_stats_profile is not set");
                   abort();
     }
     zhpe_stats->enabled = true;

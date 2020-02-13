@@ -165,6 +165,9 @@ enum {
     ZHPE_STATS_CPU          = 300,
     ZHPE_STATS_DISABLED     = 400,
     ZHPE_STATS_RDTSCP       = 500,
+    ZHPE_STATS_HW           = 600,
+    ZHPE_STATS_HW_JUST1     = 700,
+    ZHPE_STATS_CPU_JUST1    = 800,
 };
 
 /* for looking up hpe_sim offsets */

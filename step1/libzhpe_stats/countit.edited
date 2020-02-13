@@ -1,0 +1,169 @@
+Breakpoint 1, stats_setvals_just1_rdpmc (rec=0x7ffff2cd4040)
+    at /shared/hkuno/zhpe-stats/src/zhpe-support/step1/libzhpe_stats/libzhpe_stats.c:283
+warning: Source file is more recent than executable.
+283	    rec->val0 = do_rdtscp();
+(gdb) si
+do_rdtscp () at /shared/hkuno/zhpe-stats/src/zhpe-support/step1/libzhpe_stats/libzhpe_stats.c:275
+275	    return ((uint64_t)hi << 32 | lo);
+(gdb) 
+0x00007ffff7bd7067	275	    return ((uint64_t)hi << 32 | lo);
+(gdb) 
+0x00007ffff7bd7069	275	    return ((uint64_t)hi << 32 | lo);
+(gdb) 
+0x00007ffff7bd706c in stats_setvals_just1_rdpmc (rec=0x7ffff2cd4040)
+    at /shared/hkuno/zhpe-stats/src/zhpe-support/step1/libzhpe_stats/libzhpe_stats.c:275
+275	    return ((uint64_t)hi << 32 | lo);
+(gdb) 
+0x00007ffff7bd7073 in do_rdtscp ()
+    at /shared/hkuno/zhpe-stats/src/zhpe-support/step1/libzhpe_stats/libzhpe_stats.c:275
+275	    return ((uint64_t)hi << 32 | lo);
+(gdb) 
+stats_setvals_just1_rdpmc (rec=0x7ffff2cd4040)
+    at /shared/hkuno/zhpe-stats/src/zhpe-support/step1/libzhpe_stats/libzhpe_stats.c:284
+284	    rdpmc(zhpe_stats_cntr_list[0], cnt1low, cnt1high);
+(gdb) 
+0x00007ffff7bd707a	284	    rdpmc(zhpe_stats_cntr_list[0], cnt1low, cnt1high);
+(gdb) 
+0x00007ffff7bd707d	284	    rdpmc(zhpe_stats_cntr_list[0], cnt1low, cnt1high);
+(gdb) 
+0x00007ffff7bd707f	284	    rdpmc(zhpe_stats_cntr_list[0], cnt1low, cnt1high);
+(gdb) 
+285	    rec->val1 = ((long long)cnt1low) | ((long long)cnt1high ) << 32;
+(gdb) 
+0x00007ffff7bd7083	285	    rec->val1 = ((long long)cnt1low) | ((long long)cnt1high ) << 32;
+(gdb) 
+0x00007ffff7bd7087	285	    rec->val1 = ((long long)cnt1low) | ((long long)cnt1high ) << 32;
+(gdb) 
+0x00007ffff7bd708a	285	    rec->val1 = ((long long)cnt1low) | ((long long)cnt1high ) << 32;
+(gdb) 
+0x00007ffff7bd708e in stats_setvals_just1_rdpmc (rec=0x7ffff2cd4040)
+    at /shared/hkuno/zhpe-stats/src/zhpe-support/step1/libzhpe_stats/libzhpe_stats.c:285
+285	    rec->val1 = ((long long)cnt1low) | ((long long)cnt1high ) << 32;
+(gdb) 
+main (argc=<optimized out>, argv=0x7fffffffe098)
+    at /shared/hkuno/zhpe-stats/src/zhpe-support/step1/libzhpe_stats/stat_overheads.c:314
+warning: Source file is more recent than executable.
+314	    SS100;
+(gdb) 
+0x0000000000400729	314	    SS100;
+(gdb) 
+zhpe_stats_stop (subid=1) at /shared/hkuno/zhpe-stats/src/zhpe-support/step1/include/zhpe_stats.h:89
+89	    zhpe_stats_ops->stop(subid);
+(gdb) 
+0x00000000004036b7	89	    zhpe_stats_ops->stop(subid);
+(gdb) 
+0x00000000004036bb	89	    zhpe_stats_ops->stop(subid);
+(gdb) 
+stats_stop (subid=1) at /shared/hkuno/zhpe-stats/src/zhpe-support/step1/libzhpe_stats/libzhpe_stats.c:555
+555	    stats_recordme(subid, ZHPE_STATS_STOP);
+(gdb) 
+0x00007ffff7bd7261	555	    stats_recordme(subid, ZHPE_STATS_STOP);
+(gdb) 
+0x00007ffff7bd7262	555	    stats_recordme(subid, ZHPE_STATS_STOP);
+(gdb) 
+388	    dest = stats_simple_nextslot();
+(gdb) 
+0x00007ffff7bd7268 in stats_simple_nextslot ()
+    at /shared/hkuno/zhpe-stats/src/zhpe-support/step1/libzhpe_stats/libzhpe_stats.c:388
+388	    dest = stats_simple_nextslot();
+(gdb) 
+0x00007ffff7bd7270	388	    dest = stats_simple_nextslot();
+(gdb) 
+0x00007ffff7bd6d70 in __tls_get_addr@plt () from /shared/hkuno/zhpe-stats/bld/lib/libzhpe_stats.so
+(gdb) 
+__tls_get_addr () at ../sysdeps/x86_64/tls_get_addr.S:30
+30		mov 	%fs:DTV_OFFSET, %RDX_LP
+(gdb) 
+31		mov	GL_TLS_GENERATION_OFFSET+_rtld_local(%rip), %RAX_LP
+(gdb) 
+33		cmp	%RAX_LP, (%rdx)
+(gdb) 
+34		jne	1f
+(gdb) 
+35		mov	TI_MODULE_OFFSET(%rdi), %RAX_LP
+(gdb) 
+38		salq	$4, %rax
+(gdb) 
+39		movq	(%rdx,%rax), %rax
+(gdb) 
+43		cmp	$-1, %RAX_LP
+(gdb) 
+44		je	1f
+(gdb) 
+45		add	TI_OFFSET_OFFSET(%rdi), %RAX_LP
+(gdb) 
+__tls_get_addr () at ../sysdeps/x86_64/tls_get_addr.S:46
+46		ret
+(gdb) 
+0x00007ffff7bd7278 in stats_simple_nextslot ()
+    at /shared/hkuno/zhpe-stats/src/zhpe-support/step1/libzhpe_stats/libzhpe_stats.c:388
+388	    dest = stats_simple_nextslot();
+(gdb) 
+0x00007ffff7bd727b	388	    dest = stats_simple_nextslot();
+(gdb) 
+0x00007ffff7bd727f	388	    dest = stats_simple_nextslot();
+(gdb) 
+0x00007ffff7bd7283	388	    dest = stats_simple_nextslot();
+(gdb) 
+0x00007ffff7bd728a	388	    dest = stats_simple_nextslot();
+(gdb) 
+0x00007ffff7bd728e	388	    dest = stats_simple_nextslot();
+(gdb) 
+389	    dest->subid = subid;
+(gdb) 
+0x00007ffff7bd7295 in stats_recordme (opflag=2, subid=1)
+    at /shared/hkuno/zhpe-stats/src/zhpe-support/step1/libzhpe_stats/libzhpe_stats.c:389
+389	    dest->subid = subid;
+(gdb) 
+390	    dest->op_flag = opflag;
+(gdb) 
+392	    zhpe_stats_ops->setvals(dest);
+(gdb) 
+0x00007ffff7bd72a7	392	    zhpe_stats_ops->setvals(dest);
+(gdb) 
+0x00007ffff7bd6d70 in __tls_get_addr@plt () from /shared/hkuno/zhpe-stats/bld/lib/libzhpe_stats.so
+(gdb) 
+__tls_get_addr () at ../sysdeps/x86_64/tls_get_addr.S:30
+30		mov 	%fs:DTV_OFFSET, %RDX_LP
+(gdb) 
+31		mov	GL_TLS_GENERATION_OFFSET+_rtld_local(%rip), %RAX_LP
+(gdb) 
+33		cmp	%RAX_LP, (%rdx)
+(gdb) 
+34		jne	1f
+(gdb) 
+35		mov	TI_MODULE_OFFSET(%rdi), %RAX_LP
+(gdb) 
+38		salq	$4, %rax
+(gdb) 
+39		movq	(%rdx,%rax), %rax
+(gdb) 
+43		cmp	$-1, %RAX_LP
+(gdb) 
+44		je	1f
+(gdb) 
+45		add	TI_OFFSET_OFFSET(%rdi), %RAX_LP
+(gdb) 
+__tls_get_addr () at ../sysdeps/x86_64/tls_get_addr.S:46
+46		ret
+(gdb) 
+0x00007ffff7bd72af in stats_recordme (opflag=2, subid=1)
+    at /shared/hkuno/zhpe-stats/src/zhpe-support/step1/libzhpe_stats/libzhpe_stats.c:392
+392	    zhpe_stats_ops->setvals(dest);
+(gdb) 
+0x00007ffff7bd72b2	392	    zhpe_stats_ops->setvals(dest);
+(gdb) 
+0x00007ffff7bd72b5	392	    zhpe_stats_ops->setvals(dest);
+(gdb) 
+0x00007ffff7bd72b9 in stats_stop (subid=1)
+    at /shared/hkuno/zhpe-stats/src/zhpe-support/step1/libzhpe_stats/libzhpe_stats.c:392
+392	    zhpe_stats_ops->setvals(dest);
+(gdb) 
+0x00007ffff7bd72bd	392	    zhpe_stats_ops->setvals(dest);
+(gdb) 
+0x00007ffff7bd72be	392	    zhpe_stats_ops->setvals(dest);
+(gdb) 
+0x00007ffff7bd72bf in stats_recordme (opflag=2, subid=<optimized out>)
+    at /shared/hkuno/zhpe-stats/src/zhpe-support/step1/libzhpe_stats/libzhpe_stats.c:392
+392	    zhpe_stats_ops->setvals(dest);
+(gdb) 

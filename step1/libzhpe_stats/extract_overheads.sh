@@ -8,22 +8,24 @@ python3 unpackdata.py $INPUT > ${INPUT}.dat
 # produce .dat.matched file
 awk -F, -f matchem.awk ${INPUT}.dat > ${INPUT}.dat.matched
 
-BASIC_V0=`grep -e '^2,0,' ${INPUT}.dat.matched | grep -v \- |\
+# ZHPE_STATS_SUBID_STARTSTOP = 1
+BASIC_V0=`grep -e '^2,1,' ${INPUT}.dat.matched | grep -v \- |\
            awk -F, '{printf"%f\n", $3}' | sort -n| head -1`
-BASIC_V1=`grep -e '^2,0,' ${INPUT}.dat.matched | grep -v \- |\
+BASIC_V1=`grep -e '^2,1,' ${INPUT}.dat.matched | grep -v \- |\
            awk -F, '{printf"%f\n", $4}' | sort -n| head -1`
-BASIC_V2=`grep -e '^2,0,' ${INPUT}.dat.matched | grep -v \- |\
+BASIC_V2=`grep -e '^2,1,' ${INPUT}.dat.matched | grep -v \- |\
            awk -F, '{printf"%f\n", $5}' | sort -n| head -1`
-BASIC_V3=`grep -e '^2,0,' ${INPUT}.dat.matched | grep -v \- |\
+BASIC_V3=`grep -e '^2,1,' ${INPUT}.dat.matched | grep -v \- |\
            awk -F, '{printf"%f\n", $6}' | sort -n| head -1`
-BASIC_V4=`grep -e '^2,0,' ${INPUT}.dat.matched | grep -v \- |\
+BASIC_V4=`grep -e '^2,1,' ${INPUT}.dat.matched | grep -v \- |\
            awk -F, '{printf"%f\n", $7}' | sort -n| head -1`
-BASIC_V5=`grep -e '^2,0,' ${INPUT}.dat.matched | grep -v \- |\
+BASIC_V5=`grep -e '^2,1,' ${INPUT}.dat.matched | grep -v \- |\
            awk -F, '{printf"%f\n", $8}' | sort -n| head -1`
-BASIC_V6=`grep -e '^2,0,' ${INPUT}.dat.matched | grep -v \- |\
+BASIC_V6=`grep -e '^2,1,' ${INPUT}.dat.matched | grep -v \- |\
            awk -F, '{printf"%f\n", $9}' | sort -n| head -1`
 
 # get nested stamp overhead
+# ZHPE_STATS_SUBID_S_STAMP_S      = 2,
 TMP_V0=`grep -e '^2,2,' ${INPUT}.dat.matched | grep -v \- |\
            awk -F, '{printf"%f\n", $3}' | sort -n| head -1`
 TMP_V1=`grep -e '^2,2,' ${INPUT}.dat.matched | grep -v \- |\
@@ -48,6 +50,7 @@ STAMP_V5=`echo "$TMP_V5 - $BASIC_V5" | bc -l`
 STAMP_V6=`echo "$TMP_V6 - $BASIC_V6" | bc -l`
 
 # get nested measurement overhead
+# ZHPE_STATS_SUBID_S_SS_S = 3
 TMP_V0=`grep -e '^2,3,' ${INPUT}.dat.matched | grep -v \- |\
            awk -F, '{printf"%f\n", $3}' | sort -n| head -1`
 TMP_V1=`grep -e '^2,3,' ${INPUT}.dat.matched | grep -v \- |\

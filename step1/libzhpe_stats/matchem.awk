@@ -14,36 +14,50 @@
           v0_measure_oh=0;
       if (length(v0_stamp_oh) == 0)
           v0_stamp_oh=0;
+      if (length(v0_basic_oh) == 0)
+          v0_basic_oh=0;
 
       if (length(v1_measure_oh) == 0)
           v1_measure_oh=0;
       if (length(v1_stamp_oh) == 0)
           v1_stamp_oh=0;
+      if (length(v1_basic_oh) == 0)
+          v1_basic_oh=0;
 
       if (length(v2_measure_oh) == 0)
           v2_measure_oh=0;
       if (length(v2_stamp_oh) == 0)
           v2_stamp_oh=0;
+      if (length(v2_basic_oh) == 0)
+          v2_basic_oh=0;
 
       if (length(v3_measure_oh) == 0)
           v3_measure_oh=0;
       if (length(v3_stamp_oh) == 0)
           v3_stamp_oh=0;
+      if (length(v3_basic_oh) == 0)
+          v3_basic_oh=0;
 
       if (length(v4_measure_oh) == 0)
           v4_measure_oh=0;
       if (length(v4_stamp_oh) == 0)
           v4_stamp_oh=0;
+      if (length(v4_basic_oh) == 0)
+          v4_basic_oh=0;
 
       if (length(v5_measure_oh) == 0)
           v5_measure_oh=0;
       if (length(v5_stamp_oh) == 0)
           v5_stamp_oh=0;
+      if (length(v5_basic_oh) == 0)
+          v5_basic_oh=0;
 
       if (length(v6_measure_oh) == 0)
           v6_measure_oh=0;
       if (length(v6_stamp_oh) == 0)
           v6_stamp_oh=0;
+      if (length(v6_basic_oh) == 0)
+          v6_basic_oh=0;
 
       printf("v0_measure_oh was %d\n",v0_measure_oh);
       printf("v0_stamp_oh was %d\n",v0_stamp_oh);
@@ -146,31 +160,31 @@
                     ndata[$2] = cur - 1;
                     printf("%d,%d,", $1, $2);
                     printf("%d,", ($3 - data0[$2][cur]) - \
-                                        (v0_measure_oh + \
+                                        (v0_basic_oh + \
                                         (nest_stamp_cnt[nestlvl] * v0_stamp_oh) + \
                                         (nest_measure_cnt[nestlvl] * v0_measure_oh)));
                     printf("%d,", $4 - data1[$2][cur] - \
-                                        v1_measure_oh - \
+                                        v1_basic_oh - \
                                         (nest_stamp_cnt[nestlvl] * v1_stamp_oh) - \
                                         (nest_measure_cnt[nestlvl] * v1_measure_oh));
                     printf("%d,", $5 - data2[$2][cur] - \
-                                        v2_measure_oh - \
+                                        v2_basic_oh - \
                                         (nest_stamp_cnt[nestlvl] * v2_stamp_oh) - \
                                         (nest_measure_cnt[nestlvl] * v2_measure_oh));
                     printf("%d,", $6 - data3[$2][cur] - \
-                                        v3_measure_oh - \
+                                        v3_basic_oh - \
                                         (nest_stamp_cnt[nestlvl] * v3_stamp_oh) - \
                                         (nest_measure_cnt[nestlvl] * v3_measure_oh));
                     printf("%d,", $7 - data4[$2][cur] - \
-                                        v4_measure_oh - \
+                                        v4_basic_oh - \
                                         (nest_stamp_cnt[nestlvl] * v4_stamp_oh) - \
                                         (nest_measure_cnt[nestlvl] * v4_measure_oh));
                     printf("%d,", $8 - data5[$2][cur] - \
-                                        v5_measure_oh - \
+                                        v5_basic_oh - \
                                         (nest_stamp_cnt[nestlvl] * v5_stamp_oh) - \
                                         (nest_measure_cnt[nestlvl] * v5_measure_oh));
                     printf("%d,", $9 - data6[$2][cur] - \
-                                        v6_measure_oh - \
+                                        v6_basic_oh - \
                                         (nest_stamp_cnt[nestlvl] * v6_stamp_oh) - \
                                         (nest_measure_cnt[nestlvl] * v6_measure_oh));
                     printf("%d,", nest_measure_cnt[nestlvl]);
