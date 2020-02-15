@@ -44,59 +44,96 @@ _EXTERN_C_BEG
 
 #ifdef HAVE_ZHPE_STATS
 
-extern __thread struct zhpe_stats_ops *zhpe_stats_ops;
+struct zhpe_stats_record {
+    uint32_t    op_flag;
+    uint32_t    subid;
+    uint64_t    val0;
+    uint64_t    val1;
+    uint64_t    val2;
+    uint64_t    val3;
+    uint64_t    val4;
+    uint64_t    val5;
+    uint64_t    val6;
+} CACHE_ALIGNED;
+
+struct zhpe_stats_ops {
+    void                   (*open)(uint16_t uid);
+    void                   (*close)(void);
+    void                   (*enable)(void);
+    void                   (*disable)(void);
+    void                   (*pause_all)();
+    void                   (*restart_all)();
+    void                   (*stop_all)();
+    void                   (*start)(uint32_t subid);
+    void                   (*stop)(uint32_t subid);
+    void                   (*finalize)(void);
+    void                   (*stamp)(uint32_t subid, uint64_t d1, uint64_t d2,
+                                                    uint64_t d3, uint64_t d4,
+                                                    uint64_t d5, uint64_t d6);
+    void                   (*setvals)(struct zhpe_stats_record *rec);
+    struct zhpe_stats_record    *(*nextslot)();
+    void                   (*saveme)(char *dest, char *src);
+};
+
+struct zhpe_stats {
+    struct zhpe_stats_record    *buffer;
+    uint64_t                    *sim_buf;
+    struct zhpe_stats_ops *zhpe_stats_ops;
+    struct zhpe_stats_ops *saved_zhpe_stats_ops;
+    struct zhpe_stats_ops *disabled_zhpe_stats_ops;
+    uint32_t                    num_slots;
+    int                         fd;
+    uint16_t                    uid;
+    size_t                      head;
+    uint8_t                     state:4;
+    uint8_t                     enabled:1;
+};
+
+extern __thread struct zhpe_stats *zhpe_stats;
 bool zhpe_stats_init(const char *stats_dir, const char *stats_unique);
+void zhpe_stats_finalize();
+void zhpe_stats_open(uint16_t uid);
 void zhpe_stats_test(uint16_t uid);
 void zhpe_stats_test_saveme(uint32_t opflag, uint32_t subid);
 
-static inline void zhpe_stats_finalize(void)
-{
-    zhpe_stats_ops->finalize();
-}
-
-static inline void zhpe_stats_open(uint16_t uid)
-{
-    zhpe_stats_ops->open(uid);
-}
-
 static inline void zhpe_stats_close(void)
 {
-    zhpe_stats_ops->close();
+    zhpe_stats->zhpe_stats_ops->close();
 }
 
 static inline void zhpe_stats_pause_all(void)
 {
-    zhpe_stats_ops->pause_all();
+    zhpe_stats->zhpe_stats_ops->pause_all();
 }
 
 static inline void zhpe_stats_restart_all(void)
 {
-    zhpe_stats_ops->restart_all();
+    zhpe_stats->zhpe_stats_ops->restart_all();
 }
 
 static inline void zhpe_stats_stop_all(void)
 {
-    zhpe_stats_ops->stop_all();
+    zhpe_stats->zhpe_stats_ops->stop_all();
 }
 
 static inline void zhpe_stats_start(uint32_t subid)
 {
-    zhpe_stats_ops->start(subid);
+    zhpe_stats->zhpe_stats_ops->start(subid);
 }
 
 static inline void zhpe_stats_stop(uint32_t subid)
 {
-    zhpe_stats_ops->stop(subid);
+    zhpe_stats->zhpe_stats_ops->stop(subid);
 }
 
 static inline void zhpe_stats_enable(void)
 {
-    zhpe_stats_ops->enable();
+    zhpe_stats->zhpe_stats_ops->enable();
 }
 
 static inline void zhpe_stats_disable(void)
 {
-    zhpe_stats_ops->disable();
+    zhpe_stats->zhpe_stats_ops->disable();
 }
 
 static inline void zhpe_stats_stamp(uint32_t subid,
@@ -107,7 +144,7 @@ static inline void zhpe_stats_stamp(uint32_t subid,
                                     uint64_t d5,
                                     uint64_t d6)
 {
-    zhpe_stats_ops->stamp(subid, d1, d2, d3, d4, d5, d6);
+    zhpe_stats->zhpe_stats_ops->stamp(subid, d1, d2, d3, d4, d5, d6);
 }
 
 
@@ -116,6 +153,11 @@ static inline void zhpe_stats_stamp(uint32_t subid,
 
 #else
 
+static inline bool zhpe_stats_finalize()
+{
+    return false;
+}
+
 static inline bool zhpe_stats_init(const char *stats_dir,
                                    const char *stats_unique)
 {
@@ -123,8 +165,6 @@ static inline bool zhpe_stats_init(const char *stats_dir,
 }
 
 #define zhpe_stats_test(uid)            do {} while (0)
-#define zhpe_stats_finalize()           do {} while (0)
-#define zhpe_stats_open(uid)            do {} while (0)
 #define zhpe_stats_close()              do {} while (0)
 #define zhpe_stats_pause_all()          do {} while (0)
 #define zhpe_stats_restart_all()         do {} while (0)

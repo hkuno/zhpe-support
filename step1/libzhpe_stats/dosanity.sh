@@ -7,7 +7,7 @@ export LD_LIBRARY_PATH=$T/bld/lib
 export PATH=$T/bld/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin
 
 /bin/ls /tmp/*statoverhead*.1 /tmp/*sanitycheck*.8 > /tmp/$(logname).before >& /dev/null
-for i in hw just1cpu just1hw cpu
+for i in hw just1cpu just1hw cpu cache
 do
     export ZHPE_STATS_PROFILE="$i"
     $T/bld/libexec/stat_overheads  /tmp/ ${i}_statoverhead

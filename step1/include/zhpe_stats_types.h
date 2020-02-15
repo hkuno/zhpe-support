@@ -55,12 +55,13 @@ struct zhpe_stats_metadata {
 enum {
 /* cpu group */
 /* magic raw counters from John */
-    DISPATCH_RESOURCE_STALL_CYCLES0                 = 0xAF,
-    DISPATCH_RESOURCE_STALL_CYCLES1                 = 0xAE,
-    RAW_PERF_COUNT_HW_RETIRED_INSTRUCTIONS          = 0xC0,
-    RAW_PERF_COUNT_HW_CPU_CYCLES                    = 0x76,
-    RAW_PERF_COUNT_HW_RETIRED_BRANCH_INSTRUCTIONS   = 0xD1,
-    RAW_PERF_COUNT_HW_BRANCH_MISSES                 = 0xC3,
+    DISPATCH_RESOURCE_STALL_CYCLES0                       = 0xAF,
+    DISPATCH_RESOURCE_STALL_CYCLES1                       = 0xAE,
+    RAW_PERF_HW_RETIRED_INSTRUCTIONS                      = 0xC0,
+    RAW_PERF_HW_CPU_CYCLES                                = 0x76,
+    RAW_PERF_HW_RETIRED_BRANCH_INSTRUCTIONS               = 0xC2,
+    RAW_PERF_HW_RETIRED_CONDITIONAL_BRANCH_INSTRUCTIONS   = 0xD1,
+    RAW_PERF_HW_BRANCH_MISSES                             = 0xC3,
 
 /* DC cache group */
 /* raw counters from PPR for AMD Family 17h Model 31h B0 */
@@ -98,37 +99,6 @@ enum {
     ALL_L2_CACHE_HITS2                              = 0x431F70,
 };
 
-struct zhpe_stats_record {
-    uint32_t    op_flag;
-    uint32_t    subid;
-    uint64_t    val0;
-    uint64_t    val1;
-    uint64_t    val2;
-    uint64_t    val3;
-    uint64_t    val4;
-    uint64_t    val5;
-    uint64_t    val6;
-} CACHE_ALIGNED;
-
-struct zhpe_stats_ops {
-    void                   (*open)(uint16_t uid);
-    void                   (*close)(void);
-    void                   (*enable)(void);
-    void                   (*disable)(void);
-    void                   (*pause_all)();
-    void                   (*restart_all)();
-    void                   (*stop_all)();
-    void                   (*start)(uint32_t subid);
-    void                   (*stop)(uint32_t subid);
-    void                   (*finalize)(void);
-    void                   (*stamp)(uint32_t subid, uint64_t d1, uint64_t d2,
-                                                    uint64_t d3, uint64_t d4,
-                                                    uint64_t d5, uint64_t d6);
-    void                   (*setvals)(struct zhpe_stats_record *rec);
-    struct zhpe_stats_record    *(*nextslot)();
-    void                   (*saveme)(char *dest, char *src);
-};
-
 /* op ids: keep in sync with processing scripts */
 enum {
     ZHPE_STATS_START             = 1,
@@ -160,7 +130,7 @@ enum {
 
 enum {
     ZHPE_STATS_CACHE        = 100,
-    ZHPE_STATS_CACHE_ALT    = 101,
+    ZHPE_STATS_CACHE2       = 101,
     ZHPE_STATS_CARBON       = 200,
     ZHPE_STATS_CPU          = 300,
     ZHPE_STATS_DISABLED     = 400,
@@ -168,6 +138,7 @@ enum {
     ZHPE_STATS_HW           = 600,
     ZHPE_STATS_HW_JUST1     = 700,
     ZHPE_STATS_CPU_JUST1    = 800,
+    ZHPE_STATS_CPU2         = 900,
 };
 
 /* for looking up hpe_sim offsets */
