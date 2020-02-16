@@ -59,10 +59,13 @@
       if (length(v6_basic_oh) == 0)
           v6_basic_oh=0;
 
+      printf("v0_basic_oh was %d\n",v0_basic_oh);
       printf("v0_measure_oh was %d\n",v0_measure_oh);
       printf("v0_stamp_oh was %d\n",v0_stamp_oh);
+      printf("v1_basic_oh was %d\n",v1_basic_oh);
       printf("v1_measure_oh was %d\n",v1_measure_oh);
       printf("v1_stamp_oh was %d\n",v1_stamp_oh);
+      printf("v2_basic_oh was %d\n",v2_basic_oh);
       printf("v2_measure_oh was %d\n",v2_measure_oh);
       printf("v2_stamp_oh was %d\n",v2_stamp_oh);
 

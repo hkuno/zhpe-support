@@ -9,16 +9,26 @@ python3 unpackdata.py $INPUT > ${INPUT}.dat
 
 profileid=`grep profileid: ${INPUT}.dat | head -1 | awk '{print $2}'`
 
-case $profileid in
-    200) OVERHEADFILE="carbon.overheads"
+case "$profileid" in
+    "100") OVERHEADFILE="cache.overheads"
          ;;
-    100) OVERHEADFILE="cache.overheads"
+    "101") OVERHEADFILE="cache2.overheads"
          ;;
-    101) OVERHEADFILE="cache_alt.overheads"
+    "200") OVERHEADFILE="carbon.overheads"
          ;;
-    300) OVERHEADFILE="cpu.overheads"
+    "300") OVERHEADFILE="cpu.overheads"
          ;;
-    default) echo "ERROR: No overhead for $profileid"
+    "500") OVERHEADFILE="rdtscp.overheads"
+         ;;
+    "600") OVERHEADFILE="hw.overheads"
+         ;;
+    "700") OVERHEADFILE="just1hw.overheads"
+         ;;
+    "800") OVERHEADFILE="just1cpu.overheads"
+         ;;
+    "900") OVERHEADFILE="cpu2.overheads"
+         ;;
+    *) echo "ERROR: No overhead for ["$profileid"]"
           exit;
          ;;
 esac
@@ -28,6 +38,8 @@ declare -A overheads
 if [[ ! -f $OVERHEADFILE ]]; then
     echo "ERROR: No overhead for $profileid"
     exit;
+else
+    echo "overhead for $profileid is $OVERHEADFILE"
 fi
 
 # read overhead file
@@ -51,21 +63,21 @@ awk -F, -v v0_measure_oh=${overheads[MEASUREMENT_V0]} \
         -v v0_basic_oh=${overheads[BASIC_V0]} \
         -v v0_stamp_oh=${overheads[STAMP_V0]} \
         -v v1_measure_oh=${overheads[MEASUREMENT_V1]} \
-        -v v0_basic_oh=${overheads[BASIC_V1]} \
+        -v v1_basic_oh=${overheads[BASIC_V1]} \
         -v v1_stamp_oh=${overheads[STAMP_V1]} \
         -v v2_measure_oh=${overheads[MEASUREMENT_V2]} \
-        -v v0_basic_oh=${overheads[BASIC_V2]} \
+        -v v2_basic_oh=${overheads[BASIC_V2]} \
         -v v2_stamp_oh=${overheads[STAMP_V2]} \
         -v v3_measure_oh=${overheads[MEASUREMENT_V3]} \
-        -v v0_basic_oh=${overheads[BASIC_V3]} \
+        -v v3_basic_oh=${overheads[BASIC_V3]} \
         -v v3_stamp_oh=${overheads[STAMP_V3]} \
         -v v4_measure_oh=${overheads[MEASUREMENT_V4]} \
-        -v v0_basic_oh=${overheads[BASIC_V4]} \
+        -v v4_basic_oh=${overheads[BASIC_V4]} \
         -v v4_stamp_oh=${overheads[STAMP_V4]} \
         -v v5_measure_oh=${overheads[MEASUREMENT_V5]} \
-        -v v0_basic_oh=${overheads[BASIC_V5]} \
+        -v v5_basic_oh=${overheads[BASIC_V5]} \
         -v v5_stamp_oh=${overheads[STAMP_V5]} \
         -v v6_measure_oh=${overheads[MEASUREMENT_V6]} \
-        -v v0_basic_oh=${overheads[BASIC_V6]} \
+        -v v6_basic_oh=${overheads[BASIC_V6]} \
         -v v6_stamp_oh=${overheads[STAMP_V6]} \
        -f matchem.awk ${INPUT}.dat > ${INPUT}.dat.matched.adjusted
