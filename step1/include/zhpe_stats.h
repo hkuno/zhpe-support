@@ -78,9 +78,12 @@ struct zhpe_stats_ops {
 struct zhpe_stats {
     struct zhpe_stats_record    *buffer;
     uint64_t                    *sim_buf;
-    struct zhpe_stats_ops *zhpe_stats_ops;
-    struct zhpe_stats_ops *saved_zhpe_stats_ops;
-    struct zhpe_stats_ops *disabled_zhpe_stats_ops;
+    struct zhpe_stats_ops       *zhpe_stats_ops;
+    struct zhpe_stats_ops       *saved_zhpe_stats_ops;
+    struct zhpe_stats_ops       *disabled_zhpe_stats_ops;
+    int                         *zhpe_stats_fd_list;
+    uint64_t                    *zhpe_stats_cntr_list;
+    uint64_t                    *zhpe_stats_config_list;
     uint32_t                    num_slots;
     int                         fd;
     uint16_t                    uid;

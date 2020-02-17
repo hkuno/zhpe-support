@@ -5,6 +5,8 @@ INPUT=$1
 # produce .dat file
 python3 unpackdata.py $INPUT > ${INPUT}.dat
 
+OUTDIR=$( dirname $INPUT )
+
 # get overhead file from metadata
 
 profileid=`grep profileid: ${INPUT}.dat | head -1 | awk '{print $2}'`
@@ -35,11 +37,11 @@ esac
 
 declare -A overheads
 
-if [[ ! -f $OVERHEADFILE ]]; then
+if [[ ! -f ${OUTDIR}/$OVERHEADFILE ]]; then
     echo "ERROR: No overhead for $profileid"
     exit;
 else
-    echo "overhead for $profileid is $OVERHEADFILE"
+    echo "overhead for $profileid is ${OUTDIR}/$OVERHEADFILE"
 fi
 
 # read overhead file
@@ -48,7 +50,7 @@ do
     for j in STAMP MEASUREMENT BASIC
     do
         vname="${j}_V${i}"
-        overheads[${vname}]=$( grep ${vname}: $OVERHEADFILE | awk '{print $2}' )
+        overheads[${vname}]=$( grep ${vname}: ${OUTDIR}/$OVERHEADFILE | awk '{print $2}' )
         echo "${vname}: ${overheads[${vname}]}"
     done
     echo ""

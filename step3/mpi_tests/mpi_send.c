@@ -59,7 +59,7 @@ int main(int argc, char **argv)
 
     if (argc == 5) {
         zhpe_stats_init(argv[3], argv[4]);
-        zhpe_stats_test(0);
+        //zhpe_stats_test(0);
         zhpe_stats_open(1);
         zhpe_stats_enable();
         zhpe_stats_start(0);
