@@ -11,6 +11,14 @@ export LD_LIBRARY_PATH=$T/bld/lib
 export PATH=$T/bld/bin:/usr/lib64/qt-3.3/bin:/usr/local/bin:/usr/bin
 export PATH=${PATH}:/usr/local/sbin:/usr/sbin
 
+export ZHPE_STATS_PROFILE="off"
+$T/bld/libexec/stat_overheads  $OUTDIR ${i}_statoh
+
+$T/bld/libexec/sanitycheck_stats  ${OUTDIR}/ ${i}_sanitycheck
+
+$T/bin/mpitest.sh -h ~/hostfile.2.1 -p zhpe -x ZHPE_STATS_PROFILE \
+     $T/bin/mpi_numactl.sh $T/bld/libexec/mpi_send 100 32 ${OUTDIR}/ ${i}_mpisend
+
 for i in hw just1cpu just1hw cpu cache
 do
     /bin/rm -f ${OUTDIR}/${i}_stat*
@@ -22,8 +30,8 @@ do
     $T/bld/libexec/sanitycheck_stats  ${OUTDIR}/ ${i}_sanitycheck
 
    $T/bin/mpitest.sh -h ~/hostfile.2.1 -p zhpe -x ZHPE_STATS_PROFILE \
-         $T/bin/mpi_numactl.sh $T/bld/libexec/mpi_send 100 1 ${OUTDIR}/ ${i}_mpisend
-         # $T/bin/debug_wrapper $T/bld/libexec/mpi_send 100 1 ${OUTDIR}/ ${i}_mpisend
+     $T/bin/mpi_numactl.sh $T/bld/libexec/mpi_send 100 32 ${OUTDIR}/ ${i}_mpisend
+     #$T/bin/debug_wrapper $T/bld/libexec/mpi_send 100 1 ${OUTDIR}/ ${i}_mpisend
 
     ./adjust_overheads.sh  ${OUTDIR}/${i}_sanitycheck.[0-9]*.8
     ./adjust_overheads.sh  ${OUTDIR}/${i}_statoh.[0-9]*.1

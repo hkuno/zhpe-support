@@ -727,6 +727,14 @@ static void init_rdpmc_profile(__u32 petype, int count, ...)
     }
 }
 
+static void stats_disabled_open()
+{
+    if (!zhpe_stats)
+    {
+        zhpe_stats = calloc(1, sizeof(struct zhpe_stats));
+        zhpe_stats->zhpe_stats_ops = &zhpe_stats_nops;
+    }
+}
 
 static void stats_common_open(uint16_t uid)
 {
@@ -926,6 +934,12 @@ static void stats_sim_open(uint16_t uid)
 /* minimal_open sets up thread-specific data and calls profile-specific open */
 void zhpe_stats_open(uint16_t uid)
 {
+    if (zhpe_stats_profile == ZHPE_STATS_DISABLED)
+    {
+        stats_disabled_open();
+        return;
+    }
+
     stats_common_open(uid);
     switch(zhpe_stats_profile) {
         case ZHPE_STATS_CPU_JUST1:
@@ -1026,6 +1040,7 @@ void zhpe_stats_open(uint16_t uid)
             zhpe_stats->saved_zhpe_stats_ops = &stats_ops_rdpmc_memcpy;
             zhpe_stats->disabled_zhpe_stats_ops = &stats_ops_rdpmc_disabled;
             break;
+
         default:
               print_err("%s:%d Error: invalid stats profile %zu \n",
                                                             __func__, __LINE__,

@@ -150,7 +150,7 @@
                 cursubid = stack[stacklen];
                 if ( cursubid != $2 )
                 {
-                    printf("# unmatched stop %d != %d\n",cursubid2, $2);
+                    printf("# unmatched stop. expected %d, saw %d\n",cursubid2, $2);
                     if (nestlvl > 0)
                     {
                         for ( i=0; i< nestlvl; i++)
@@ -249,7 +249,18 @@
                     }
                     if (pausedlen > 0)
                     {
-                        printf("# CLEARING PAUSED: %d\n",pausedlen);
+                        if (pausedlen > 0) {
+                            printf("# CLEARING PAUSED %d: ",pausedlen);
+                            i=pausedlen-1;
+                            printf("%d",paused[i]);
+                            for ( i=pausedlen-2; i >= 0; i-- )
+                            {
+                                printf(", %d",paused[i]);
+                            }
+                            printf("\n");
+                        } else {
+                            printf("# Clearing paused: nothing paused\n");
+                        }
 
                         if (nestlvl > 0)
                         for ( i=0; i < nestlvl; i++)
@@ -321,7 +332,6 @@
                 {
                 if ($1 == ZHPE_PAUSE_ALL)
                 {
-                    printf("# PAUSING %d\n",stacklen);
                     if (( pausedlen > 0 ) && (stacklen > 0))
                     {
                       printf("ERROR: Cannot nest stats_pause_all\n");
@@ -370,11 +380,35 @@
                             paused[foocnt] = cursubid;
                             foocnt++;
                         }
+                        if (pausedlen > 0) {
+                            printf("# PAUSING %d: ",pausedlen);
+                            i=pausedlen-1;
+                            printf("%d",paused[i]);
+                            for ( i=pausedlen-2; i >= 0; i-- )
+                            {
+                                printf(", %d",paused[i]);
+                            }
+                            printf("\n");
+                        } else {
+                            printf("# Pause_all: nothing to pause\n");
+                        }
                     }
                 } else {
                     if ($1 == ZHPE_RESTART_ALL)
                     {
-                        printf("# Restarting %d\n",pausedlen);
+                        if (pausedlen > 0) {
+                            printf("# RESTART_ALL %d: ",pausedlen);
+                            i=pausedlen-1;
+                            printf("%d",paused[i]);
+                            for ( i=pausedlen-2; i >= 0; i-- )
+                            {
+                                printf(", %d",paused[i]);
+                            }
+                            printf("\n");
+                        } else {
+                            printf("# RESTART_ALL: nothing paused\n");
+                        }
+
                         if (nestlvl > 0)
                         for ( i=0; i < nestlvl; i++)
                             nest_measure_cnt[i]++;
