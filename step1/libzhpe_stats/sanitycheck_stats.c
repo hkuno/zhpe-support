@@ -157,6 +157,13 @@ int main(int argc, char **argv)
     zhpe_stats_start(6);
 
     zhpe_stats_close();
+
+    zhpe_stats_open(8);
+    zhpe_stats_stamp(8,88,88,88,88,88,88);
+    zhpe_stats_close();
+    zhpe_stats_open(9);
+    zhpe_stats_stamp(9,99,99,99,99,99,99);
+    zhpe_stats_close();
     zhpe_stats_finalize();
 
     ret = 0;

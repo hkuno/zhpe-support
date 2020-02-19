@@ -19,7 +19,7 @@ $T/bld/libexec/sanitycheck_stats  ${OUTDIR}/ ${i}_sanitycheck
 $T/bin/mpitest.sh -h ~/hostfile.2.1 -p zhpe -x ZHPE_STATS_PROFILE \
      $T/bin/mpi_numactl.sh $T/bld/libexec/mpi_send 100 32 ${OUTDIR}/ ${i}_mpisend
 
-for i in hw just1cpu just1hw cpu cache
+for i in hw just1cpu just1hw cache cpu
 do
     /bin/rm -f ${OUTDIR}/${i}_stat*
     /bin/rm -f ${OUTDIR}/${i}_sanity*
