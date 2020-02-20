@@ -494,7 +494,6 @@ static void sim_stats_close()
 {
     int64_t ret;
 //printf("IN sim_stats_close\n");
-//printf("about to DATA_REC_END\n");
     ret=sim_api_data_rec(DATA_REC_END, zhpe_stats->uid,
                                        (uintptr_t)zhpe_stats->sim_buf);
     if (ret)
@@ -752,15 +751,19 @@ static void stats_sim_open(uint16_t uid)
 {
     uint64_t                    len;
     int64_t ret;
-    ret=sim_api_data_rec(DATA_REC_CREAT, uid,
-                                      (uintptr_t)&len);
+
+    // removing the following line causes a compiler warning
+    printf("\n");
+
+    ret=sim_api_data_rec(DATA_REC_CREAT, uid, (uintptr_t)&len);
     if (ret) {
         print_func_err(__func__, __LINE__, "sim_api_data_rec",
                        "DATA_REC_CREAT", -ret);
         abort();
     }
 
-    zhpe_stats->sim_buf = calloc(1,len);
+    if (zhpe_stats->sim_buf == NULL)
+        zhpe_stats->sim_buf = calloc(1,len);
 
     ret=sim_api_data_rec(DATA_REC_START, uid, (uintptr_t)zhpe_stats->sim_buf);
     if (ret) {
@@ -773,6 +776,7 @@ static void stats_sim_open(uint16_t uid)
 
 static void stats_common_open(uint16_t uid)
 {
+//printf("in stats_common_open\n");
     char *fname = NULL;
 
     if (zhpe_stats_profile == 0)
@@ -793,8 +797,10 @@ static void stats_common_open(uint16_t uid)
 
         if (zhpe_stats->uid == uid)
         {
+//printf("in stats_common_open: uid == uid\n");
             return;
         } else {
+//printf("in stats_common_open: new uid\n");
             zhpe_stats->uid = uid;
             close(zhpe_stats->fd);
             zhpe_stats->fd = -1;
@@ -813,6 +819,8 @@ static void stats_common_open(uint16_t uid)
             }
             free(fname);
             stats_write_metadata();
+            if (zhpe_stats_profile ==  ZHPE_STATS_CARBON)
+                stats_sim_open(uid);
         }
     }
     else
@@ -960,8 +968,6 @@ bool zhpe_stats_init(const char *stats_dir, const char *stats_unique)
 {
     bool                ret = false;
     char                *tmp;
-    FILE                *file = NULL;
-    char                platform[10];
 
     if (!stats_dir && !stats_unique) {
         print_err("%s,%u:missing %s and %s\n", __func__, __LINE__,
@@ -985,20 +991,7 @@ bool zhpe_stats_init(const char *stats_dir, const char *stats_unique)
 
     print_err("Setting ZHPE_STATS_PROFILE to %s.\n",tmp);
 
-    file = fopen("/sys/module/zhpe/parameters/platform", "r");
-    if (!file) {
-        ret = -errno;
-        print_func_err(__func__, __LINE__, "fopen",
-                                "/sys/module/zhpe/parameters/platform", ret);
-        goto done;
-    }
-    if (!fgets(platform, sizeof(platform), file)) {
-        ret = -EIO;
-        print_func_err(__func__, __LINE__, "fgets",
-                                "/sys/module/zhpe/parameters/platform", ret);
-        goto done;
-    }
-    if (!strcmp(platform, "carbon\n"))
+    if (!strcmp(tmp, "carbon"))
     {
         if (!strcmp("carbon",tmp)) {
             zhpe_stats_profile = ZHPE_STATS_CARBON;
