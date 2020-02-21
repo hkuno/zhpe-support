@@ -101,16 +101,14 @@ enum {
 
 /* op ids: keep in sync with processing scripts */
 enum {
-    ZHPE_STATS_START             = 1,
-    ZHPE_STATS_STOP              = 2,
-    ZHPE_STATS_STOP_ALL          = 3,
-    ZHPE_STATS_PAUSE_ALL         = 4,
-    ZHPE_STATS_RESTART_ALL       = 5,
-    ZHPE_STATS_STAMP             = 8,
-    ZHPE_STATS_OPEN              = 9,
-    ZHPE_STATS_CLOSE             = 10,
-    ZHPE_STATS_FLUSH_START       = 11,
-    ZHPE_STATS_FLUSH_STOP        = 12,
+    ZHPE_STATS_OP_START             = 1,
+    ZHPE_STATS_OP_STOP              = 2,
+    ZHPE_STATS_OP_STOP_ALL          = 3,
+    ZHPE_STATS_OP_PAUSE_ALL         = 4,
+    ZHPE_STATS_OP_RESTART_ALL       = 5,
+    ZHPE_STATS_OP_STAMP             = 8,
+    ZHPE_STATS_OP_OPEN              = 9,
+    ZHPE_STATS_OP_CLOSE             = 10,
 };
 
 
@@ -129,16 +127,16 @@ enum {
 };
 
 enum {
-    ZHPE_STATS_CACHE        = 100,
-    ZHPE_STATS_CACHE2       = 101,
-    ZHPE_STATS_CARBON       = 200,
-    ZHPE_STATS_CPU          = 300,
-    ZHPE_STATS_DISABLED     = 400,
-    ZHPE_STATS_RDTSCP       = 500,
-    ZHPE_STATS_HW           = 600,
-    ZHPE_STATS_HW_JUST1     = 700,
-    ZHPE_STATS_CPU_JUST1    = 800,
-    ZHPE_STATS_CPU2         = 900,
+    ZHPE_STATS_PROFILE_CACHE        = 100,
+    ZHPE_STATS_PROFILE_CACHE2       = 101,
+    ZHPE_STATS_PROFILE_CARBON       = 200,
+    ZHPE_STATS_PROFILE_CPU          = 300,
+    ZHPE_STATS_PROFILE_DISABLED     = 400,
+    ZHPE_STATS_PROFILE_RDTSCP       = 500,
+    ZHPE_STATS_PROFILE_HW           = 600,
+    ZHPE_STATS_PROFILE_HW_JUST1     = 700,
+    ZHPE_STATS_PROFILE_CPU_JUST1    = 800,
+    ZHPE_STATS_PROFILE_CPU2         = 900,
 };
 
 /* for looking up hpe_sim offsets */
