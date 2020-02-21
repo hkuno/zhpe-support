@@ -511,7 +511,7 @@ static void stats_start_memcpy(uint32_t subid)
 
 static void stats_stop_memcpy(uint32_t subid)
 {
-    stats_recordme_memcpy(subid, ZHPE_STATS_OP_START);
+    stats_recordme_memcpy(subid, ZHPE_STATS_OP_STOP);
 }
 
 static void stats_stop_all_memcpy(uint32_t subid)
@@ -529,7 +529,7 @@ static void stats_start(uint32_t subid)
 static void stats_stop(uint32_t subid)
 {
 //printf("IN stats_stop\n");
-    stats_recordme(subid, ZHPE_STATS_OP_START);
+    stats_recordme(subid, ZHPE_STATS_OP_STOP);
 }
 
 static void stats_pause_all(uint32_t subid)
