@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Hewlett Packard Enterprise Development LP.
+ * Copyright (C) 2019-2020 Hewlett Packard Enterprise Development LP.
  * All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -1188,27 +1188,5 @@ void zhpe_stats_open(uint16_t uid)
     stats_common_open(uid);
 
     zhpe_stats->enabled = true;
-}
-
-#else /* HAVE_ZHPE_STATS */
-
-bool zhpe_stats_finalize()
-{
-    return false;
-}
-
-bool zhpe_stats_init(const char *stats_dir,
-                                   const char *stats_unique)
-{
-#ifdef DEBUG
-    print_err("%s,%u:libzhpe_stats built without stats support\n",
-              __func__, __LINE__);
-#endif
-
-    return false;
-}
-
-void zhpe_stats_open(uint16_t uid)
-{
 }
 #endif // HAVE_ZHPE_STATS

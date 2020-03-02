@@ -96,8 +96,12 @@ bool zhpe_stats_finalize();
 void zhpe_stats_open(uint16_t uid);
 void zhpe_stats_test(uint16_t uid);
 void zhpe_stats_test_saveme(uint32_t opflag, uint32_t subid);
+uint16_t zhpe_stats_subid(uint16_t uid, uint16_t id);
 
 #ifdef HAVE_ZHPE_STATS
+
+#define zhpe_stats_subid(_name, _id)            \
+    ((ZHPE_STATS_SUBID_##_name * 1000) + _id)
 
 static inline void zhpe_stats_close(void)
 {
@@ -151,11 +155,11 @@ static inline void zhpe_stats_stamp(uint32_t subid,
 }
 
 
-#define zhpe_stats_subid(_name, _id)            \
-    ((ZHPE_STATS_SUBID_##_name * 1000) + _id)
-
 #else // HAVE_ZHPE_STATS
 
+#define zhpe_stats_open(_uid)           do {} while (0)
+#define zhpe_stats_init(_name, _unique) do {} while (0)
+#define zhpe_stats_finalize()           do {} while (0)
 #define zhpe_stats_test(uid)            do {} while (0)
 #define zhpe_stats_close()              do {} while (0)
 #define zhpe_stats_pause_all()          do {} while (0)
@@ -166,7 +170,6 @@ static inline void zhpe_stats_stamp(uint32_t subid,
 #define zhpe_stats_enable()             do {} while (0)
 #define zhpe_stats_disable()            do {} while (0)
 #define zhpe_stats_stamp(_subid, _v1, _v2, _v3, _v4, _v5, _v6)   do {} while (0)
-#define zhpe_stats_subid(_name, _id)
 
 #endif // HAVE_ZHPE_STATS
 _EXTERN_C_END

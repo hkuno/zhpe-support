@@ -178,6 +178,14 @@ enum {
     ZHPE_STATS_SUBID_MPI         = 50,
 };
 
+enum {
+    SEND        = 10,
+    RECV        = 20,
+    RMA         = 30,
+    ZHPQ        = 40,
+    MPI         = 50,
+};
+
 _EXTERN_C_END
 
 #endif /* _ZHPE_STATS_TYPES_H_ */
