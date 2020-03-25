@@ -52,13 +52,16 @@ int main(int argc, char **argv)
 
     /* We're going to assume MPI isn't tweaking the arguments. */
     if (argc != 3 && argc != 5) {
+        /* We need to call MPI_Init because done calls MPI_Finalize */
+        MPI_Init(&argc, &argv);
         fprintf(stderr, "Usage:%s <loops> <size> [stats_dir <unique>]\n",
                 argv[0]);
         goto done;
     }
 
+    zhpe_stats_init(argv[3], argv[4]);
+
     if (argc == 5) {
-        zhpe_stats_init(argv[3], argv[4]);
         zhpe_stats_test(0);
         zhpe_stats_open(1);
         zhpe_stats_enable();

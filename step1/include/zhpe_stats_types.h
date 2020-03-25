@@ -53,6 +53,11 @@ struct zhpe_stats_metadata {
 };
 
 enum {
+    ZHPE_STATS_DISABLED                     = 0,
+    ZHPE_STATS_ENABLED                      = 1,
+};
+
+enum {
 /* cpu group */
 /* magic raw counters from John */
     DISPATCH_RESOURCE_STALL_CYCLES0                       = 0xAF,

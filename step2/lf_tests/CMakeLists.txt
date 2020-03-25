@@ -17,7 +17,6 @@ add_executable(onenode_mmaptest onenode_mmaptest.c)
 target_link_libraries(onenode_mmaptest PUBLIC zhpeq_util_fab zhpe_mmap)
 
 add_executable(regtest regtest.c)
-#target_link_libraries(regtest PUBLIC zhpe_stats zhpeq_util_fab)
 target_link_libraries(regtest PUBLIC zhpe_stats zhpeq_util_fab)
 
 add_executable(ringpong ringpong.c)

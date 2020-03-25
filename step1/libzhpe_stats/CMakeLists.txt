@@ -11,4 +11,4 @@ install(FILES
   ${CMAKE_SOURCE_DIR}/include/zhpe_stats.h
   ${CMAKE_SOURCE_DIR}/include/zhpe_stats_types.h
   DESTINATION include)
-install(PROGRAMS matchem.awk unpackdata.py DESTINATION libexec)
+install(PROGRAMS extract_overheads.sh matchem.awk stats_unpack.sh unpackdata.py DESTINATION libexec/zhpe_stats)
