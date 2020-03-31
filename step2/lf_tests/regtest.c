@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2018 Hewlett Packard Enterprise Development LP.
+ * Copyright (C) 2017-2020 Hewlett Packard Enterprise Development LP.
  * All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -147,10 +147,11 @@ static void usage(bool help)
     print_usage(
         help,
         "Usage:%s <start-size> <steps> <iterations>\n"
-        "Register/free memory and collect Carbon statistics\n"
+        "Register/free memory and collect zhpe statistics\n"
         "sizes may be postfixed with [kmgtKMGT] to specify the"
         " base units.\n"
-        "Lower case is base 10; upper case is base 2.\n",
+        "Lower case is base 10; upper case is base 2.\n"
+        "(Note: must set ZHPE_STATS_DIR if using stats.)\n",
         appname);
 
     if (help) {
@@ -168,7 +169,7 @@ int main(int argc, char **argv)
 
     zhpeq_util_init(argv[0], LOG_INFO, false);
 
-    zhpe_stats_init("/tmp", "reg");
+    zhpe_stats_init("reg");
     zhpe_stats_test(0);
     zhpe_stats_open(1);
 
