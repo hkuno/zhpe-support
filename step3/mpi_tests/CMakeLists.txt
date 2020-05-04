@@ -20,6 +20,10 @@ add_executable(mpi_inv mpi_inv.c)
 set_target_properties(mpi_inv PROPERTIES LINK_FLAGS ${MPI_C_LINK_FLAGS})
 target_link_libraries(mpi_inv PUBLIC zhpeq_util ${MPI_C_LIBRARIES})
 
+add_executable(mpi_isend mpi_isend.c)
+set_target_properties(mpi_isend PROPERTIES LINK_FLAGS ${MPI_C_LINK_FLAGS})
+target_link_libraries(mpi_isend PUBLIC zhpe_stats zhpeq_util zhpeq_util_fab ${MPI_C_LIBRARIES})
+
 add_executable(mpi_lf_threads mpi_lf_threads.c)
 set_target_properties(mpi_lf_threads PROPERTIES LINK_FLAGS ${MPI_C_LINK_FLAGS})
 target_link_libraries(
@@ -37,6 +41,7 @@ install(
   TARGETS
   mpi_exit
   mpi_inv
+  mpi_isend
   mpi_lf_threads
   mpi_send mpi_zbw
   DESTINATION libexec)
