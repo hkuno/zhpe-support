@@ -29,9 +29,9 @@ add_executable(mpi_send mpi_send.c)
 set_target_properties(mpi_send PROPERTIES LINK_FLAGS ${MPI_C_LINK_FLAGS})
 target_link_libraries(mpi_send PUBLIC zhpe_stats zhpeq_util ${MPI_C_LIBRARIES})
 
-add_executable(mpi_vectorsend mpi_vectorsend.c)
-set_target_properties(mpi_vectorsend PROPERTIES LINK_FLAGS ${MPI_C_LINK_FLAGS})
-target_link_libraries(mpi_vectorsend PUBLIC zhpe_stats zhpeq zhpeq_util ${MPI_C_LIBRARIES})
+add_executable(mpi_xingflood mpi_xingflood.c)
+set_target_properties(mpi_xingflood PROPERTIES LINK_FLAGS ${MPI_C_LINK_FLAGS})
+target_link_libraries(mpi_xingflood PUBLIC zhpe_stats zhpeq zhpeq_util ${MPI_C_LIBRARIES})
 
 add_executable(mpi_zbw mpi_zbw.c)
 set_target_properties(mpi_zbw PROPERTIES LINK_FLAGS ${MPI_C_LINK_FLAGS})
@@ -43,5 +43,5 @@ install(
   mpi_inv
   mpi_lf_threads
   mpi_send mpi_zbw
-  mpi_vectorsend
+  mpi_xingflood
   DESTINATION libexec)
