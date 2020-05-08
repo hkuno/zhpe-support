@@ -36,9 +36,6 @@ target_link_libraries(libzhpeq_zaddr PUBLIC zhpeq zhpeq_util)
 add_executable(nop nop.c)
 target_link_libraries(nop PUBLIC zhpeq zhpeq_util)
 
-add_executable(xingpong_bulk xingpong_bulk.c)
-target_link_libraries(xingpong_bulk PUBLIC zhpeq zhpeq_util)
-
 add_executable(xingpong xingpong.c)
 target_link_libraries(xingpong PUBLIC zhpeq zhpeq_util)
 
@@ -56,6 +53,5 @@ install(
   libzhpeq_regtime
   libzhpeq_util_log
   nop
-  xingpong_bulk
   xingpong
   DESTINATION libexec)

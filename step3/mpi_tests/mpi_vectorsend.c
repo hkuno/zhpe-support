@@ -48,6 +48,8 @@
  *      - Clean up options/usage/extraneous functions
  *      - Launch servers and clients separately using MPI, and set port number to
  *        initial port number + rank id.
+ *      - After that works, then launch servers and clients at once
+ *        using MPI, and set port number to port number + rank id%(worldsize/2)
  *
  * */
 
@@ -55,6 +57,8 @@
 #include <zhpeq_util.h>
 
 #include <sys/queue.h>
+
+#include <mpi.h>
 
 #define BACKLOG         (10)
 #ifdef DEBUG
@@ -105,6 +109,7 @@ STAILQ_HEAD(rx_queue_head, rx_queue);
 
 struct args {
     const char          *node;
+    const char          *baseservice;
     const char          *service;
     uint64_t            bufaddr;
     uint64_t            ring_entry_len;
@@ -336,8 +341,8 @@ static int do_client_unidir(struct stuff *conn)
     uint64_t            now;
     double              optime;
 
+    MPI_Barrier(MPI_COMM_WORLD);
 
-    /*MPI_Barrier() ; */
     start = get_cycles(NULL);
 
     while (conn->ops_completed < args->ring_ops) {
@@ -418,7 +423,9 @@ int do_ztq_setup(struct stuff *conn)
     /* Loop and fill in all commmand buffers with zeros. */
     for (i =0; i<conn->ztq->tqinfo.cmdq.ent; i++) {
         wqe = &conn->ztq->wq[i];
-        memset(zhpeq_tq_puti(wqe, 0, args->ring_entry_len, conn->ztq_remote_rx_zaddr), 0, args->ring_entry_len);
+        memset(zhpeq_tq_puti(wqe, 0, args->ring_entry_len,
+               conn->ztq_remote_rx_zaddr+(i*args->ring_entry_len)),
+               0, args->ring_entry_len);
     }
  done:
     return ret;
@@ -434,6 +441,8 @@ static int do_server_one(const struct args *oargs, int conn_fd)
         .sock_fd        = conn_fd,
     };
     struct cli_wire_msg cli_msg;
+
+    MPI_Barrier(MPI_COMM_WORLD);
 
     /* Let's take a moment to get the client parameters over the socket. */
     ret = sock_recv_fixed_blob(conn.sock_fd, &cli_msg, sizeof(cli_msg));
@@ -482,6 +491,7 @@ static int do_server(const struct args *args)
     struct addrinfo     *resp = NULL;
     int                 oflags = 1;
 
+    printf("FOOBAR3: my port is %s\n",args->service);
     ret = do_getaddrinfo(NULL, args->service,
                          AF_INET6, SOCK_STREAM, true, &resp);
     if (ret < 0)
@@ -639,6 +649,13 @@ int main(int argc, char **argv)
     bool                client_opt = false;
     int                 opt;
     int                 rc;
+    int                 myrank;
+    int                 portnum;
+    char                *buffer;
+
+    MPI_Init(&argc,&argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
+    printf("FOOBAR1: my rank is %d\n",myrank);
 
     zhpeq_util_init(argv[0], LOG_INFO, false);
 
@@ -712,14 +729,24 @@ int main(int argc, char **argv)
 
     opt = argc - optind;
 
+    buffer = calloc(5,sizeof(char));
     if (opt == 1) {
-        args.service = argv[optind++];
+        args.baseservice=argv[optind++];
+        portnum=(atoi(args.baseservice) + myrank);
+        sprintf(buffer,"%d",portnum);
+        args.service=buffer;
+        printf("FOOBAR2: my rank is %d; my baseservice is %s\n",myrank,args.baseservice);
+        printf("FOOBAR2: my rank is %d; my port is %s\n",myrank,args.service);
         if (client_opt)
             usage(false);
         if (do_server(&args) < 0)
             goto done;
     } else if (opt == 5) {
-        args.service = argv[optind++];
+        args.baseservice=argv[optind++];
+        portnum=(atoi(args.baseservice) + myrank);
+        sprintf(buffer,"%d",portnum);
+        args.service=buffer;
+        printf("my rank is %d; my port is %s\n",myrank,args.service); 
         args.node = argv[optind++];
         if (parse_kb_uint64_t(__func__, __LINE__, "entry_len",
                               argv[optind++], &args.ring_entry_len, 0,
@@ -742,5 +769,6 @@ int main(int argc, char **argv)
     ret = 0;
 
  done:
+    MPI_Finalize();
     return ret;
 }
