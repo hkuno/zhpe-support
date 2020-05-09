@@ -89,6 +89,23 @@ You will need to replace this, because it needs the socket.
 #define L1_CACHELINE    ((size_t)64)
 #define ZTQ_LEN         (1023)
 
+/* global variables */
+int  my_rank;
+int  worldsize;
+
+#define MPI_CALL(_func, ...)                                    \
+do {                                                            \
+    int                 __rc = _func(__VA_ARGS__);              \
+                                                                \
+    if (unlikely(__rc != MPI_SUCCESS)) {                        \
+        zhpeu_print_err("%s,%u:%d:%s() returned %d\n",          \
+                        __func__, __LINE__, my_rank, #_func,    \
+                        __rc);                                  \
+        MPI_Abort(MPI_COMM_WORLD, 1);                           \
+    }                                                           \
+} while (0)
+
+
 static struct zhpeq_attr zhpeq_attr;
 
 /* server-only */
@@ -109,8 +126,6 @@ struct args {
     uint64_t            ring_entries;
     uint64_t            ring_ops;
     bool                once_mode;
-    int                 myrank;
-    int                 worldsize;
 };
 
 struct stuff {
@@ -120,13 +135,13 @@ struct stuff {
     struct zhpeq_rq     *zrq;
     struct zhpeq_key_data *ztq_local_kdata;  /* server-only */
     struct zhpeq_key_data *ztq_remote_kdata; /* client-only */
-    struct rx_queue     *rx_rcv;             /* server-only */
     uint64_t            ztq_remote_rx_zaddr; /* client-only */
     void                *rx_addr;            /* server-only */
-    uint64_t            ops_completed;       /* client-only? */
+    uint64_t            ops_completed;       /* client-only */
     size_t              ring_entry_aligned;
     size_t              ring_ops;
     size_t              ring_end_off;
+    uint32_t            cmdq_entries;        /* server-only */
     void                *addr_cookie;
 };
 
@@ -139,91 +154,74 @@ static void stuff_free(struct stuff *stuff)
         zhpeq_qkdata_free(stuff->ztq_remote_kdata);
         zhpeq_qkdata_free(stuff->ztq_local_kdata);
     }
-    if (stuff->args->myrank > 0)
+    if (my_rank > 0) {
         zhpeq_domain_remove_addr(stuff->zqdom, stuff->addr_cookie);
-    if (stuff->zrq)
-        zhpeq_rq_free(stuff->zrq);
-    zhpeq_tq_free(stuff->ztq);
+        if (stuff->zrq)
+            zhpeq_rq_free(stuff->zrq);
+    } else {
+        zhpeq_tq_free(stuff->ztq);
+    }
     zhpeq_domain_free(stuff->zqdom);
 
-    free(stuff->rx_rcv);
-
-    if ((stuff->args->myrank == 0) && (stuff->rx_addr))
-            munmap(stuff->rx_addr, stuff->ring_end_off);
+    if ((my_rank == 0) && (stuff->rx_addr))
+        munmap(stuff->rx_addr, stuff->ring_end_off);
 }
 
-/* only server needs to set up memory */
-static int do_server_mem_setup(struct stuff *conn)
-{
-    int                 ret = -EEXIST;
-    const struct args   *args = conn->args;
-    size_t              mask = L1_CACHELINE - 1;
-    size_t              req;
-
-    conn->ring_entry_aligned = (args->ring_entry_len + mask) & ~mask;
-
-    /* Size of an array of entries plus a tail index. */
-    req = conn->ring_entry_aligned * args->ring_entries;
-    conn->ring_end_off = req;
-
-    conn->rx_addr = mmap((void *)(uintptr_t)args->bufaddr, req,
-                     PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED,
-                     -1 , 0);
-
-    ret = zhpeq_mr_reg(conn->zqdom, conn->rx_addr, req,
-                       (ZHPEQ_MR_GET | ZHPEQ_MR_PUT |
-                        ZHPEQ_MR_GET_REMOTE | ZHPEQ_MR_PUT_REMOTE),
-                       &conn->ztq_local_kdata);
-    if (ret < 0) {
-        print_func_err(__func__, __LINE__, "zhpeq_mr_reg", "", ret);
-        goto done;
-    }
-
-    req = sizeof(*conn->rx_rcv) * args->ring_entries + conn->ring_end_off;
-    ret = -posix_memalign((void **)&conn->rx_rcv, page_size, req);
-    if (ret < 0) {
-        conn->rx_rcv = NULL;
-        print_func_errn(__func__, __LINE__, "posix_memalign", true,
-                        req, ret);
-        goto done;
-    }
- done:
-    return ret;
-}
-
-/* server broadcasts ztq_remote_rx_addr to all clients */
-static int do_mem_xchg(struct stuff *conn)
+/* server allocates and broadcasts ztq_remote_rx_addr to all clients */
+static int do_mem_setup(struct stuff *conn)
 {
     int                 ret;
     char                blob[ZHPEQ_MAX_KEY_BLOB];
     size_t              blob_len;
     uint64_t            ztq_remote_rx_addr;
 
-    if (conn->args->myrank == 0) {
+    const struct args   *args = conn->args;
+    size_t              mask = L1_CACHELINE - 1;
+    size_t              req;
+    union zhpe_hw_wq_entry *wqe;
+    int                 i;
+
+    ret = -EEXIST;
+
+    /* everyone needs this */
+    conn->ring_entry_aligned = (args->ring_entry_len + mask) & ~mask;
+
+    /* only server sets up rx_addr */
+    if (my_rank == 0) {
+        req = conn->ring_entry_aligned * conn->cmdq_entries * (worldsize - 1);
+        conn->ring_end_off = req;
+
+        conn->rx_addr = mmap((void *)(uintptr_t)args->bufaddr, req,
+                         PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED,
+                         -1 , 0);
+
+        ret = zhpeq_mr_reg(conn->zqdom, conn->rx_addr, req,
+                           (ZHPEQ_MR_GET | ZHPEQ_MR_PUT |
+                            ZHPEQ_MR_GET_REMOTE | ZHPEQ_MR_PUT_REMOTE),
+                           &conn->ztq_local_kdata);
+
         blob_len = sizeof(blob);
         ret = zhpeq_qkdata_export(conn->ztq_local_kdata,
-                              conn->ztq_local_kdata->z.access, blob, &blob_len);
+                                  conn->ztq_local_kdata->z.access,
+                                  blob, &blob_len);
         if (ret < 0) {
-            print_func_err(__func__, __LINE__, "zhpeq_qkdata_export", "", ret);
-            goto done;
+                print_func_err(__func__, __LINE__, "zhpeq_qkdata_export", "", ret);
+                goto done;
         }
     }
-    if (MPI_Bcast(&blob, ZHPEQ_MAX_KEY_BLOB, MPI_CHAR, 0, MPI_COMM_WORLD)
-                        != MPI_SUCCESS)
-                goto done;
-    if (MPI_Bcast(&blob_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD)
-                        != MPI_SUCCESS)
-                goto done;
 
-    if (conn->args->myrank == 0) {
-        ztq_remote_rx_addr = htobe64((uintptr_t)conn->rx_addr);
-    }
-    if (MPI_Bcast(&ztq_remote_rx_addr, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD)
-                        != MPI_SUCCESS)
-                goto done;
+    MPI_CALL(MPI_Bcast, blob, ZHPEQ_MAX_KEY_BLOB, MPI_CHAR, 0, MPI_COMM_WORLD);
 
-    if (conn->args->myrank > 0) {
-        ztq_remote_rx_addr = be64toh(ztq_remote_rx_addr);
+    MPI_CALL(MPI_Bcast, &blob_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+
+    ztq_remote_rx_addr = (uintptr_t)conn->rx_addr;
+
+    MPI_CALL(MPI_Bcast, &ztq_remote_rx_addr, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+
+    /* only clients set up ztq_remote_rx_addr */
+    if (my_rank > 0) {
+        ztq_remote_rx_addr += conn->ring_entry_aligned *
+                              conn->cmdq_entries * (my_rank - 1);
         ret = zhpeq_qkdata_import(conn->zqdom, conn->addr_cookie, blob, blob_len,
                               &conn->ztq_remote_kdata);
         if (ret < 0) {
@@ -244,8 +242,18 @@ static int do_mem_xchg(struct stuff *conn)
                            "", ret);
             goto done;
         }
-    }
 
+        if (my_rank > 0) {
+            /* Loop and fill in my commmand buffers with zeros. */
+            for (i =0; i<conn->cmdq_entries; i++) {
+                wqe = &conn->ztq->wq[i];
+                memset(zhpeq_tq_puti(wqe, 0, args->ring_entry_len,
+                       conn->ztq_remote_rx_zaddr+(i*conn->ring_entry_aligned)),
+                       0, args->ring_entry_len);
+                wqe->hdr.cmp_index = i;
+            }
+        }
+    }
  done:
     return ret;
 }
@@ -266,31 +274,31 @@ static inline struct zhpe_cq_entry *tq_cq_entry(struct zhpeq_tq *ztq,
 
 static int ztq_completions(struct stuff *conn)
 {
-    ssize_t             ret = 0;
-    struct zhpe_cq_entry *cqe;
-    struct zhpe_cq_entry cqe_copy;
-    const uint stride = 1;
+    ssize_t  ret = 0;
+    struct   zhpe_cq_entry *cqe;
+    uint32_t stride = 64;
 
-    while ((cqe = tq_cq_entry(conn->ztq, stride))) {
+    stride = min(stride, conn->ztq->wq_tail_commit - conn->ztq->cq_head);
+    if (unlikely(stride == 0)) {
+        return ret;
+    }
+    while ((cqe = tq_cq_entry(conn->ztq, stride-1))) {
         /* unlikely() to optimize the no-error case. */
         if (unlikely(cqe->status != ZHPE_HW_CQ_STATUS_SUCCESS)) {
-            cqe_copy = *cqe;
-            zhpeq_tq_cq_entry_done(conn->ztq, cqe);
             ret = -EIO;
             print_err("ERROR: %s,%u:index 0x%x status 0x%x\n", __func__, __LINE__,
-                      cqe_copy.index, cqe_copy.status);
-            break;
+                      cqe->index, cqe->status);
         }
         conn->ztq->cq_head += stride;
         conn->ops_completed += stride;
-        ret++;
+        ret+=stride;
     }
 
     return ret;
 }
 
 /* check for completions, send as many as we've got, and ring doorbell. */
-static int ztq_write(struct zhpeq_tq *ztq )
+static int ztq_write(struct zhpeq_tq *ztq)
 {
     uint32_t            qmask;
     uint32_t            avail;
@@ -316,15 +324,17 @@ static int do_client_unidir(struct stuff *conn)
     uint64_t            now;
     double              optime;
 
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_CALL(MPI_Barrier, MPI_COMM_WORLD);
 
     start = get_cycles(NULL);
 
     while (conn->ops_completed < args->ring_ops) {
+        ret = ztq_write(conn->ztq);
         ret = ztq_completions(conn);
-        if (conn->ops_completed <  args->ring_ops)
-            ret = ztq_write(conn->ztq);
     }
+
+    while ((int32_t)(conn->ztq->wq_tail_commit - conn->ztq->cq_head)  > 0)
+        ret = ztq_completions(conn);
 
     now = get_cycles(NULL);
 
@@ -339,38 +349,14 @@ static int do_client_unidir(struct stuff *conn)
     return ret;
 }
 
-/* server broadcasts its sa to all clients  */
-int bcast_rq_addr(struct stuff *conn, void *sa, size_t *sa_len)
+
+int do_queue_setup(struct stuff *conn)
 {
-    int                 ret = -EINVAL;
-
-    if (!conn->zrq || !sa || !sa_len)
-        goto done;
-
-    if (conn->args->myrank == 0) {
-        ret = zhpeq_rq_get_addr(conn->zrq, sa, sa_len);
-        if (ret < 0)
-            goto done;
-    }
-
-    if (MPI_Bcast(sa, (int)*sa_len, MPI_BYTE, 0, MPI_COMM_WORLD)
-                        != MPI_SUCCESS)
-        goto done;
- done:
-    return ret;
-}
-
-
-/* Pre-populate client's command buffer. */
-int do_ztq_setup(struct stuff *conn)
-{
-    int                 i;
-    int                 ret;
-    const struct args   *args = conn->args;
-    union sockaddr_in46 sa;
-    size_t              sa_len = sizeof(sa);
-
-    union zhpe_hw_wq_entry *wqe;
+    int                  ret;
+    const struct args    *args = conn->args;
+    struct sockaddr_zhpe sa;
+    size_t               sa_len = sizeof(sa);
+    uint32_t             ent_sum, ent_max;
 
     ret = -EINVAL;
 
@@ -381,25 +367,50 @@ int do_ztq_setup(struct stuff *conn)
         goto done;
     }
 
-    /* Allocate zqueues. */
-    ret = zhpeq_tq_alloc(conn->zqdom, args->ring_entries,
+    /* Only clients get a ztq. */
+    if (my_rank > 0) {
+        ret = zhpeq_tq_alloc(conn->zqdom, args->ring_entries,
                      args->ring_entries,
                      0, 0, 0,  &conn->ztq);
-    if (ret < 0) {
+        if (ret < 0) {
             print_func_err(__func__, __LINE__, "zhpeq_tq_qalloc", "", ret);
             goto done;
+        }
+        conn->cmdq_entries = conn->ztq->tqinfo.cmplq.ent;
     }
-    ret = zhpeq_rq_alloc(conn->zqdom, 1, 0, &conn->zrq);
-    if (ret < 0) {
-        print_func_err(__func__, __LINE__, "zhpeq_rq_qalloc", "", ret);
-        goto done;
+
+    /* verify everyone's command queue is same size */
+    MPI_CALL(MPI_Reduce, &conn->cmdq_entries, &ent_sum, 1, MPI_UINT32_T,
+                        MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_CALL(MPI_Reduce, &conn->cmdq_entries, &ent_max, 1, MPI_UINT32_T,
+                        MPI_MAX, 0, MPI_COMM_WORLD);
+
+    if (my_rank == 0) {
+        if ((ent_max * (worldsize -1))  != ent_sum) {
+           print_func_err(__func__, __LINE__, "ent_min != ent_max", "", ent_sum);
+           print_func_err(__func__, __LINE__, "ent_min != ent_max", "", ent_max);
+           goto done;
+        }
+        conn->cmdq_entries = ent_max;
+
+        /* only server gets a zrq */
+        ret = zhpeq_rq_alloc(conn->zqdom, 1, 0, &conn->zrq);
+        if (ret < 0) {
+            print_func_err(__func__, __LINE__, "zhpeq_rq_qalloc", "", ret);
+            goto done;
+        }
+
+        ret = zhpeq_rq_get_addr(conn->zrq, &sa, &sa_len);
+        if (ret < 0)
+            goto done;
     }
 
     /* server sends remote address to clients */
-    ret = bcast_rq_addr(conn, &sa, &sa_len);
+    MPI_CALL(MPI_Bcast, &sa_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+    MPI_CALL(MPI_Bcast, &sa, (int)sa_len, MPI_BYTE, 0, MPI_COMM_WORLD);
 
     /* clients insert the remote address in the domain. */
-    if (conn->args->myrank > 0) {
+    if (my_rank > 0) {
         ret = zhpeq_domain_insert_addr(conn->zqdom, &sa, &conn->addr_cookie);
         if (ret < 0) {
             print_func_err(__func__, __LINE__,
@@ -407,23 +418,13 @@ int do_ztq_setup(struct stuff *conn)
             goto done;
         }
     }
-    /* Now let's exchange the memory parameters to the other side. */
-    if (conn->args->myrank == 0) {
-        ret = do_server_mem_setup(conn);
-        if (ret < 0)
-            goto done;
-    }
-    ret = do_mem_xchg(conn);
-    if (ret < 0)
+
+    /* server allocates memory and tells clients memory parameters . */
+    /* clients set up and initialize memory. */
+    ret = do_mem_setup(conn);
+    if (ret < 0) {
+        print_func_err(__func__, __LINE__, "do_mem_xchg", "", ret);
         goto done;
-    if (conn->args->myrank > 0) {
-        /* Loop and fill in all commmand buffers with zeros. */
-        for (i =0; i<conn->ztq->tqinfo.cmdq.ent; i++) {
-            wqe = &conn->ztq->wq[i];
-            memset(zhpeq_tq_puti(wqe, 0, args->ring_entry_len,
-                   conn->ztq_remote_rx_zaddr+(i*conn->ring_entry_aligned)),
-                   0, args->ring_entry_len);
-        }
     }
  done:
     return ret;
@@ -438,11 +439,11 @@ static int do_server(const struct args *oargs)
         .args           = args,
     };
 
-    ret = do_ztq_setup(&conn);
+    ret = do_queue_setup(&conn);
     if (ret < 0)
         goto done;
 
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_CALL(MPI_Barrier, MPI_COMM_WORLD);
  done:
     stuff_free(&conn);
 
@@ -460,11 +461,14 @@ static int do_client(const struct args *args)
         .ring_ops       = args->ring_ops,
     };
 
-    ret = do_ztq_setup(&conn);
+    ret = do_queue_setup(&conn);
     if (ret < 0)
         goto done;
 
     ret = do_client_unidir(&conn);
+    if (ret < 0)
+        goto done;
+
 
  done:
     stuff_free(&conn);
@@ -502,9 +506,9 @@ int main(int argc, char **argv)
     int                 opt;
     int                 rc;
 
-    MPI_Init(&argc,&argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &args.myrank);
-    MPI_Comm_size(MPI_COMM_WORLD, &args.worldsize);
+    MPI_CALL(MPI_Init, &argc,&argv);
+    MPI_CALL(MPI_Comm_rank, MPI_COMM_WORLD, &my_rank);
+    MPI_CALL(MPI_Comm_size, MPI_COMM_WORLD, &worldsize);
 
     args.once_mode = false;
 
@@ -563,7 +567,7 @@ int main(int argc, char **argv)
                           PARSE_KB | PARSE_KIB) < 0)
         usage(false);
 
-    if (args.myrank == 0) {
+    if (my_rank == 0) {
         if (do_server(&args) < 0)
             goto done;
     } else {
@@ -574,6 +578,6 @@ int main(int argc, char **argv)
     ret = 0;
 
  done:
-    MPI_Finalize();
+    MPI_CALL(MPI_Finalize);
     return ret;
 }
