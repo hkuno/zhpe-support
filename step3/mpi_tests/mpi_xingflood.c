@@ -78,10 +78,14 @@
  *          calculation accordingly.
  *          Print out both versions of the time from the cycles and the clock.
  *          Look in the tqinfo and print out the slice and queue.
+ *
+ *  - Get do_barrier to work with all ranks
+ *  - Split so just clients call do_barrier
  */
 
 #include <zhpeq.h>
 #include <zhpeq_util.h>
+#include <zhpe_stats.h>
 
 #include <sys/queue.h>
 
@@ -102,6 +106,9 @@
 /* global variables */
 int  my_rank;
 int  worldsize;
+int  client_rank;
+int  client_worldsize;
+MPI_Comm client_comm;
 
 #define MPI_CALL(_func, ...)                                    \
 do {                                                            \
@@ -130,19 +137,18 @@ struct rx_queue {
 STAILQ_HEAD(rx_queue_head, rx_queue);
 
 struct args {
-    uint64_t            bufaddr;
     uint64_t            ring_entry_len;
     uint64_t            ring_entries;
     uint64_t            ring_ops;
     uint32_t            stride;
-    bool                once_mode;
+    bool                use_geti;
 };
 
 struct stuff {
     const struct args   *args;
     struct zhpeq_dom    *zqdom;
-    struct zhpeq_tq     *ztq;
-    struct zhpeq_rq     *zrq;
+    struct zhpeq_tq     *ztq;                /* client-only */
+    struct zhpeq_rq     *zrq;                /* server only */
     struct zhpeq_key_data *ztq_local_kdata;  /* server-only */
     struct zhpeq_key_data *ztq_remote_kdata; /* client-only */
     uint64_t            ztq_remote_rx_zaddr; /* client-only */
@@ -151,9 +157,73 @@ struct stuff {
     size_t              ring_entry_aligned;
     size_t              ring_ops;
     size_t              ring_end_off;
-    uint32_t            cmdq_entries;        /* server-only */
+    uint32_t            cmdq_entries;
     void                *addr_cookie;
 };
+
+
+struct timerank {
+    struct timespec     ts_barrier;
+    int                 rank;
+};
+
+int tr_compare(const void *v1, const void *v2)
+{
+    int                 ret;
+    const struct timerank *tr1 = v1;
+    const struct timerank *tr2 = v2;
+
+    ret = arithcmp(tr1->ts_barrier.tv_sec, tr2->ts_barrier.tv_sec);
+    if (ret)
+        return ret;
+    ret = arithcmp(tr1->ts_barrier.tv_nsec, tr2->ts_barrier.tv_nsec);
+    if (ret)
+        return ret;
+    ret = arithcmp(tr1->rank, tr2->rank);
+    if (ret)
+        return ret;
+
+    return 0;
+}
+
+void do_barrier(int barrier_id)
+{
+    struct timerank     *tr_all = NULL;
+    struct timerank     tr_self;
+    int                 i;
+    uint64_t            delta;
+    char                time_str[ZHPEU_TM_STR_LEN];
+
+    tr_self.rank = my_rank;
+    if (client_rank == 0)
+        tr_all = xcalloc(client_worldsize, sizeof(*tr_all));
+
+// printf("my_rank is %d; client_rank is %d; client_worldsize is %d\n",my_rank, client_rank, client_worldsize);
+
+    MPI_CALL(MPI_Barrier, MPI_COMM_WORLD);
+   // MPI_CALL(MPI_Barrier, client_comm);
+    clock_gettime(CLOCK_REALTIME, &tr_self.ts_barrier);
+
+    /* Lazy about structs. */
+    MPI_CALL(MPI_Gather, &tr_self, sizeof(tr_self), MPI_CHAR,
+             tr_all, sizeof(*tr_all), MPI_CHAR, 0, client_comm);
+
+    if (client_rank != 0)
+        return;
+
+    qsort(tr_all, client_worldsize, sizeof(*tr_all), tr_compare);
+
+    zhpeu_tm_to_str(time_str, sizeof(time_str),
+                    localtime(&tr_all[0].ts_barrier.tv_sec),
+                    tr_all[0].ts_barrier.tv_nsec);
+
+    delta = 0;
+    for (i = 0;  i < client_worldsize; i++) {
+        delta = ts_delta(&tr_all[0].ts_barrier, &tr_all[i].ts_barrier);
+    }
+    printf("do_barrier output: barrier %5d rank %3d delta %10.3f usec\n",
+            barrier_id, tr_all[i-1].rank, (double)delta / 1000.0);
+}
 
 static void stuff_free(struct stuff *stuff)
 {
@@ -201,8 +271,8 @@ static int do_mem_setup(struct stuff *conn)
         req = conn->ring_entry_aligned * conn->cmdq_entries * (worldsize - 1);
         conn->ring_end_off = req;
 
-        conn->rx_addr = mmap((void *)(uintptr_t)args->bufaddr, req,
-                         PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_SHARED,
+        conn->rx_addr = mmap( NULL, req, PROT_READ | PROT_WRITE,
+                         MAP_ANONYMOUS | MAP_SHARED,
                          -1 , 0);
 
         ret = zhpeq_mr_reg(conn->zqdom, conn->rx_addr, req,
@@ -252,9 +322,19 @@ static int do_mem_setup(struct stuff *conn)
                            "", ret);
             goto done;
         }
+    }
 
-        if (my_rank > 0) {
-            /* Loop and fill in my commmand buffers with zeros. */
+    if (my_rank > 0) {
+        if (args->use_geti) {
+            /* Loop and fill in my commmand buffers with geti commands. */
+            for (i =0; i<conn->cmdq_entries; i++) {
+                wqe = &conn->ztq->wq[i];
+                zhpeq_tq_geti(wqe, 0, args->ring_entry_len,
+                       conn->ztq_remote_rx_zaddr+(i*conn->ring_entry_aligned));
+                wqe->hdr.cmp_index = i;
+            }
+        } else {
+            /* Loop and fill in my commmand buffers puti commands. */
             for (i =0; i<conn->cmdq_entries; i++) {
                 wqe = &conn->ztq->wq[i];
                 memset(zhpeq_tq_puti(wqe, 0, args->ring_entry_len,
@@ -262,8 +342,8 @@ static int do_mem_setup(struct stuff *conn)
                        0, args->ring_entry_len);
                 wqe->hdr.cmp_index = i;
             }
-        }
     }
+  }
  done:
     return ret;
 }
@@ -288,7 +368,8 @@ static int ztq_completions(struct stuff *conn)
     struct      zhpe_cq_entry *cqe;
     uint32_t    mystride;
 
-    mystride = min((uint32_t)conn->args->stride, (uint32_t)(conn->ztq->wq_tail_commit - conn->ztq->cq_head));
+    mystride = min((uint32_t)conn->args->stride,
+                   (uint32_t)(conn->ztq->wq_tail_commit - conn->ztq->cq_head));
     if (unlikely(mystride == 0)) {
         return ret;
     }
@@ -328,7 +409,6 @@ static int ztq_write(struct zhpeq_tq *ztq)
 /* Use existing pre-populated command buffer. */
 static int do_client_unidir(struct stuff *conn)
 {
-    int                 ret = 0;
     const struct args   *args = conn->args;
     uint64_t            start;
     uint64_t            now;
@@ -337,25 +417,20 @@ static int do_client_unidir(struct stuff *conn)
     struct timespec     start_clocktime;
     struct timespec     now_clocktime;
 
-    /* time the barrier */
-    MPI_CALL(MPI_Barrier, MPI_COMM_WORLD);
+    //MPI_CALL(MPI_Barrier, MPI_COMM_WORLD);
+    /* call do_barrier here */
+    do_barrier(1);
 
     clock_gettime(CLOCK_REALTIME, &start_clocktime);
     start = get_cycles(NULL);
 
     while (conn->ops_completed < args->ring_ops) {
-        ret = ztq_write(conn->ztq);
-        if (ret < 0)
-            goto done;
-        ret = ztq_completions(conn);
-        if (ret < 0)
-            goto done;
+        ztq_write(conn->ztq);
+        ztq_completions(conn);
     }
 
     while ((int32_t)(conn->ztq->wq_tail_commit - conn->ztq->cq_head)  > 0) {
-        ret = ztq_completions(conn);
-        if (ret < 0)
-            goto done;
+        ztq_completions(conn);
     }
 
     now = get_cycles(NULL);
@@ -366,16 +441,19 @@ static int do_client_unidir(struct stuff *conn)
     clocktime = ((uint64_t)now_clocktime.tv_sec * NSEC_PER_SEC + now_clocktime.tv_nsec) -
                 ((uint64_t)start_clocktime.tv_sec * NSEC_PER_SEC + start_clocktime.tv_nsec); 
 
+/* print barrier skew information */
     printf("%s:ops count:%"PRIu64":;",appname,conn->ops_completed);
         printf("slice:%d:;",conn->ztq->tqinfo.slice);
         printf("queue:%d:;",conn->ztq->tqinfo.queue);
         printf("cycletime in usec:%.3f:;", cycletime);
-        printf("clocktime in nsec:%"PRIu64":;", clocktime);
-        printf("ops per usec cycletime:%.3f:;", conn->ops_completed/cycletime);
-        printf("ops per usec clocktime:%"PRId64":;", conn->ops_completed/(clocktime/1000));
+        printf("clocktime in usec:%.3f:;", (double)clocktime/1000.0);
+        printf("ops per sec cycletime:%.3f:;", (conn->ops_completed * 1000000)/cycletime);
+        printf("ops per sec clocktime:%.3f:;", (double)(conn->ops_completed * 1000000000)/(double)(clocktime));
         printf("\n");
-   done:
-    return ret;
+
+    MPI_CALL(MPI_Barrier, MPI_COMM_WORLD);
+
+    return 0;
 }
 
 int do_queue_setup(struct stuff *conn)
@@ -399,7 +477,9 @@ int do_queue_setup(struct stuff *conn)
     if (my_rank > 0) {
         ret = zhpeq_tq_alloc(conn->zqdom, args->ring_entries,
                      args->ring_entries,
-                     0, 0, 0,  &conn->ztq);
+                     0, 1,
+                     (1<<((my_rank - 1)&(ZHPE_MAX_SLICES - 1)))|SLICE_DEMAND,
+                     &conn->ztq);
         if (ret < 0) {
             print_func_err(__func__, __LINE__, "zhpeq_tq_qalloc", "", ret);
             goto done;
@@ -472,12 +552,9 @@ static int do_server(const struct args *oargs)
         goto done;
 
     MPI_CALL(MPI_Barrier, MPI_COMM_WORLD);
+    MPI_CALL(MPI_Barrier, MPI_COMM_WORLD);
  done:
     stuff_free(&conn);
-
-    if (ret >= 0)
-        ret = (oargs->once_mode ? 1 : 0);
-
     return ret;
 }
 
@@ -500,7 +577,6 @@ static int do_client(const struct args *args)
 
  done:
     stuff_free(&conn);
-
     return ret;
 }
 
@@ -510,15 +586,14 @@ static void usage(bool help)
 {
     print_usage(
         help,
-        "Usage:%s [-o] [-b <address>] [-s stride]\n"
+        "Usage:%s [-g] [-s stride]\n"
         "    <entry_len> <ring_entries> <op_count>\n"
         "All sizes may be postfixed with [kmgtKMGT] to specify the"
         " base units.\n"
         "Lower case is base 10; upper case is base 2.\n"
         "All three arguments required.\n"
         "Options:\n"
-        " -b <address> : try to allocate buffer at address\n"
-        " -o : run once and then server will exit\n"
+        " -g: use geti instead of puti to transfer data\n"
         " -s <stride>: stride for checking completions\n",
         appname);
 
@@ -531,17 +606,23 @@ static void usage(bool help)
 int main(int argc, char **argv)
 {
     int                 ret = 1;
-    struct args         args;
+    struct args         args = { .stride=0, .use_geti=false, };
     int                 opt;
     int                 rc;
     uint64_t            stride64;
+    int                 color;
 
     MPI_CALL(MPI_Init, &argc,&argv);
     MPI_CALL(MPI_Comm_rank, MPI_COMM_WORLD, &my_rank);
     MPI_CALL(MPI_Comm_size, MPI_COMM_WORLD, &worldsize);
 
-    args.once_mode = false;
+    color = (my_rank == 0) ? MPI_UNDEFINED : 1;
+    MPI_CALL(MPI_Comm_split, MPI_COMM_WORLD, color, my_rank, &client_comm);
 
+    if (my_rank > 0) {
+         MPI_CALL(MPI_Comm_rank, client_comm, &client_rank);
+         MPI_CALL(MPI_Comm_size, client_comm, &client_worldsize);
+    }
     zhpeq_util_init(argv[0], LOG_INFO, false);
 
     rc = zhpeq_init(ZHPEQ_API_VERSION, &zhpeq_attr);
@@ -553,39 +634,25 @@ int main(int argc, char **argv)
     if (argc == 1)
         usage(true);
 
-    while ((opt = getopt(argc, argv, "b:o")) != -1) {
+    while ((opt = getopt(argc, argv, "gs:")) != -1) {
 
         switch (opt) {
 
-        case 'b':
-            if (args.bufaddr)
+        case 'g':
+            if (args.use_geti)
                 usage(false);
-            if (parse_kb_uint64_t(__func__, __LINE__, "bufaddr",
-                                  optarg, &args.bufaddr, 0, 1,
-                                  SIZE_MAX, PARSE_KB | PARSE_KIB) < 0)
-                usage(false);
+            args.use_geti=true;
             break;
-
-        case 'o':
-            if (args.once_mode)
-                usage(false);
-            args.once_mode = true;
-            break;
-
 
         case 's':
             if (args.stride)
                 usage(false);
             if (parse_kb_uint64_t(__func__, __LINE__, "stride",
                                   optarg, &stride64, 0, 1,
-                                  SIZE_MAX, PARSE_KB | PARSE_KIB) < 0)
+                                  UINT32_MAX, PARSE_KB | PARSE_KIB) < 0)
                 usage(false);
-            if (stride64 > UINT32_MAX)
-                usage(false);
-            else
-                args.stride=(uint32_t)(stride64);
+            args.stride=(uint32_t)(stride64);
             break;
-
 
         default:
             usage(false);
@@ -596,6 +663,7 @@ int main(int argc, char **argv)
     if (! args.stride)
         args.stride=64;
 
+    printf("args.stride was %d\n",args.stride);
     opt = argc - optind;
 
     if (opt != 3)
@@ -626,6 +694,10 @@ int main(int argc, char **argv)
     ret = 0;
 
  done:
+    if (ret > 0)
+        MPI_Abort(MPI_COMM_WORLD, ret);
+    if (my_rank > 0)
+        MPI_CALL(MPI_Comm_free, &client_comm);
     MPI_CALL(MPI_Finalize);
     return ret;
 }
