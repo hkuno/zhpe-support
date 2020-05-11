@@ -58,16 +58,26 @@
  *          - Client does not need transmit nor receive queue.
  *          - Client does not need transmit nor receive queue.
  *          - Server needs tell clients the sa.
-Just have rank 0 allocate a single buffer big enough for everyone, broadcast the information, and have the other ranks compute their spot.
+ *      - Have rank 0 allocate a single buffer big enough for everyone,
+ *        broadcast the information, and have the other ranks compute their spot.
+ *        Exchange addresses and insert the remote address in the domain.
  *
- *   Exchange addresses and insert the remote address in the domain.
-    ret = zhpeq_rq_xchg_addr(conn->zrq, conn->sock_fd, &sa, &sa_len);
-    if (ret < 0) {
-        print_func_err(__func__, __LINE__, "zhpeq_tq_xchg_addr",
-                       "", ret);
-        goto done;
-    }
-You will need to replace this, because it needs the socket.
+ *      - make stride a parameter
+ *
+ * TIME:
+ *      John Byrne:
+ *        - Take the do_barrier function in mpi_barrier and use it to
+ *          measure the skew of your barrier.
+ *        - Take a look in mpi_zbw to see how MPI_Comm_split gets used.
+ *        - You can make a communicator for 1-64 to synchronize the start
+ *          and use MPI_COMM_WORLD for the end.
+ *        - Also sample the wall clock after the cycles at the end of
+ *          each rank and sort and show the maximum skew.
+ *          Instead of passing ops_completed to cycles_to_usec() pass in 1
+ *          to get the wall clock time and adjust the ops-per-second
+ *          calculation accordingly.
+ *          Print out both versions of the time from the cycles and the clock.
+ *          Look in the tqinfo and print out the slice and queue.
  */
 
 #include <zhpeq.h>
@@ -105,7 +115,6 @@ do {                                                            \
     }                                                           \
 } while (0)
 
-
 static struct zhpeq_attr zhpeq_attr;
 
 /* server-only */
@@ -125,6 +134,7 @@ struct args {
     uint64_t            ring_entry_len;
     uint64_t            ring_entries;
     uint64_t            ring_ops;
+    uint32_t            stride;
     bool                once_mode;
 };
 
@@ -274,24 +284,24 @@ static inline struct zhpe_cq_entry *tq_cq_entry(struct zhpeq_tq *ztq,
 
 static int ztq_completions(struct stuff *conn)
 {
-    ssize_t  ret = 0;
-    struct   zhpe_cq_entry *cqe;
-    uint32_t stride = 64;
+    ssize_t     ret = 0;
+    struct      zhpe_cq_entry *cqe;
+    uint32_t    mystride;
 
-    stride = min(stride, conn->ztq->wq_tail_commit - conn->ztq->cq_head);
-    if (unlikely(stride == 0)) {
+    mystride = min((uint32_t)conn->args->stride, (uint32_t)(conn->ztq->wq_tail_commit - conn->ztq->cq_head));
+    if (unlikely(mystride == 0)) {
         return ret;
     }
-    while ((cqe = tq_cq_entry(conn->ztq, stride-1))) {
+    while ((cqe = tq_cq_entry(conn->ztq, mystride-1))) {
         /* unlikely() to optimize the no-error case. */
         if (unlikely(cqe->status != ZHPE_HW_CQ_STATUS_SUCCESS)) {
             ret = -EIO;
             print_err("ERROR: %s,%u:index 0x%x status 0x%x\n", __func__, __LINE__,
                       cqe->index, cqe->status);
         }
-        conn->ztq->cq_head += stride;
-        conn->ops_completed += stride;
-        ret+=stride;
+        conn->ztq->cq_head += mystride;
+        conn->ops_completed += mystride;
+        ret+=mystride;
     }
 
     return ret;
@@ -322,33 +332,51 @@ static int do_client_unidir(struct stuff *conn)
     const struct args   *args = conn->args;
     uint64_t            start;
     uint64_t            now;
-    double              optime;
+    double              cycletime;
+    uint64_t            clocktime;
+    struct timespec     start_clocktime;
+    struct timespec     now_clocktime;
 
+    /* time the barrier */
     MPI_CALL(MPI_Barrier, MPI_COMM_WORLD);
 
+    clock_gettime(CLOCK_REALTIME, &start_clocktime);
     start = get_cycles(NULL);
 
     while (conn->ops_completed < args->ring_ops) {
         ret = ztq_write(conn->ztq);
+        if (ret < 0)
+            goto done;
         ret = ztq_completions(conn);
+        if (ret < 0)
+            goto done;
     }
 
-    while ((int32_t)(conn->ztq->wq_tail_commit - conn->ztq->cq_head)  > 0)
+    while ((int32_t)(conn->ztq->wq_tail_commit - conn->ztq->cq_head)  > 0) {
         ret = ztq_completions(conn);
+        if (ret < 0)
+            goto done;
+    }
 
     now = get_cycles(NULL);
+    clock_gettime(CLOCK_REALTIME, &now_clocktime);
 
     printf("queue size:%"PRIu32"\n",conn->ztq->tqinfo.cmdq.ent);
-    optime = cycles_to_usec(now - start, conn->ops_completed);
-    printf("%s:time in usec:%.3f; ops count:%"PRIu64"; ops per sec:%.3f\n",
-               appname,
-               optime,
-               conn->ops_completed,
-               1000000.0/optime
-              );
+    cycletime = cycles_to_usec(now - start, 1);
+    clocktime = ((uint64_t)now_clocktime.tv_sec * NSEC_PER_SEC + now_clocktime.tv_nsec) -
+                ((uint64_t)start_clocktime.tv_sec * NSEC_PER_SEC + start_clocktime.tv_nsec); 
+
+    printf("%s:ops count:%"PRIu64":;",appname,conn->ops_completed);
+        printf("slice:%d:;",conn->ztq->tqinfo.slice);
+        printf("queue:%d:;",conn->ztq->tqinfo.queue);
+        printf("cycletime in usec:%.3f:;", cycletime);
+        printf("clocktime in nsec:%"PRIu64":;", clocktime);
+        printf("ops per usec cycletime:%.3f:;", conn->ops_completed/cycletime);
+        printf("ops per usec clocktime:%"PRId64":;", conn->ops_completed/(clocktime/1000));
+        printf("\n");
+   done:
     return ret;
 }
-
 
 int do_queue_setup(struct stuff *conn)
 {
@@ -482,7 +510,7 @@ static void usage(bool help)
 {
     print_usage(
         help,
-        "Usage:%s [-os] [-b <address>]\n"
+        "Usage:%s [-o] [-b <address>] [-s stride]\n"
         "    <entry_len> <ring_entries> <op_count>\n"
         "All sizes may be postfixed with [kmgtKMGT] to specify the"
         " base units.\n"
@@ -490,7 +518,8 @@ static void usage(bool help)
         "All three arguments required.\n"
         "Options:\n"
         " -b <address> : try to allocate buffer at address\n"
-        " -o : run once and then server will exit\n",
+        " -o : run once and then server will exit\n"
+        " -s <stride>: stride for checking completions\n",
         appname);
 
     if (help)
@@ -505,6 +534,7 @@ int main(int argc, char **argv)
     struct args         args;
     int                 opt;
     int                 rc;
+    uint64_t            stride64;
 
     MPI_CALL(MPI_Init, &argc,&argv);
     MPI_CALL(MPI_Comm_rank, MPI_COMM_WORLD, &my_rank);
@@ -542,11 +572,29 @@ int main(int argc, char **argv)
             args.once_mode = true;
             break;
 
+
+        case 's':
+            if (args.stride)
+                usage(false);
+            if (parse_kb_uint64_t(__func__, __LINE__, "stride",
+                                  optarg, &stride64, 0, 1,
+                                  SIZE_MAX, PARSE_KB | PARSE_KIB) < 0)
+                usage(false);
+            if (stride64 > UINT32_MAX)
+                usage(false);
+            else
+                args.stride=(uint32_t)(stride64);
+            break;
+
+
         default:
             usage(false);
 
         }
     }
+
+    if (! args.stride)
+        args.stride=64;
 
     opt = argc - optind;
 
