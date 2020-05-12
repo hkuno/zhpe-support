@@ -141,6 +141,7 @@ struct args {
     uint64_t            ring_entries;
     uint64_t            ring_ops;
     uint32_t            stride;
+    int                 slice;
     bool                use_geti;
 };
 
@@ -475,11 +476,17 @@ int do_queue_setup(struct stuff *conn)
 
     /* Only clients get a ztq. */
     if (my_rank > 0) {
-        ret = zhpeq_tq_alloc(conn->zqdom, args->ring_entries,
-                     args->ring_entries,
-                     0, 1,
+        if (args->slice < 0) {
+            ret = zhpeq_tq_alloc(conn->zqdom, args->ring_entries,
+                     args->ring_entries, 0, 1,
                      (1<<((my_rank - 1)&(ZHPE_MAX_SLICES - 1)))|SLICE_DEMAND,
                      &conn->ztq);
+        } else {
+            ret = zhpeq_tq_alloc(conn->zqdom, args->ring_entries,
+                     args->ring_entries, 0, 1,
+                     (1<<(args->slice))|SLICE_DEMAND,
+                     &conn->ztq);
+        }
         if (ret < 0) {
             print_func_err(__func__, __LINE__, "zhpeq_tq_qalloc", "", ret);
             goto done;
@@ -586,7 +593,7 @@ static void usage(bool help)
 {
     print_usage(
         help,
-        "Usage:%s [-g] [-s stride]\n"
+        "Usage:%s [-g] [-s stride] [-S slice]\n"
         "    <entry_len> <ring_entries> <op_count>\n"
         "All sizes may be postfixed with [kmgtKMGT] to specify the"
         " base units.\n"
@@ -594,7 +601,9 @@ static void usage(bool help)
         "All three arguments required.\n"
         "Options:\n"
         " -g: use geti instead of puti to transfer data\n"
-        " -s <stride>: stride for checking completions\n",
+        " -s <stride>: stride for checking completions\n"
+        " -S <slice number>: slice number from 0-3\n"
+        "",
         appname);
 
     if (help)
@@ -606,10 +615,14 @@ static void usage(bool help)
 int main(int argc, char **argv)
 {
     int                 ret = 1;
-    struct args         args = { .stride=0, .use_geti=false, };
+    struct args         args = { .stride=0,
+                                 .slice=-1,
+                                 .use_geti=false,
+                               };
     int                 opt;
     int                 rc;
     uint64_t            stride64;
+    uint64_t            slice64;
     int                 color;
 
     MPI_CALL(MPI_Init, &argc,&argv);
@@ -634,7 +647,7 @@ int main(int argc, char **argv)
     if (argc == 1)
         usage(true);
 
-    while ((opt = getopt(argc, argv, "gs:")) != -1) {
+    while ((opt = getopt(argc, argv, "gs:S:")) != -1) {
 
         switch (opt) {
 
@@ -652,6 +665,16 @@ int main(int argc, char **argv)
                                   UINT32_MAX, PARSE_KB | PARSE_KIB) < 0)
                 usage(false);
             args.stride=(uint32_t)(stride64);
+            break;
+
+        case 'S':
+            if (args.slice > 0)
+                usage(false);
+            if (parse_kb_uint64_t(__func__, __LINE__, "slice",
+                                  optarg, &slice64, 0, 0,
+                                  3, PARSE_KB | PARSE_KIB) < 0)
+                usage(false);
+            args.slice=(int)(slice64);
             break;
 
         default:
