@@ -686,7 +686,9 @@ int main(int argc, char **argv)
     if (! args.stride)
         args.stride=64;
 
-    printf("args.stride was %d\n",args.stride);
+    if (my_rank == 0)
+        printf("args.stride was %d\n",args.stride);
+
     opt = argc - optind;
 
     if (opt != 3)
