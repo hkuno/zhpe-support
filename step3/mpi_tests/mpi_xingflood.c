@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2020 Hewlett Packard Enterprise Development LP.
+ * Copyright (C) 2020 Hewlett Packard Enterprise Development LP.
  * All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -42,6 +42,15 @@
 
 #include <mpi.h>
 
+enum z_op_types {
+    ZNONE,
+    ZGET,
+    ZGETI,
+    ZPUT,
+    ZPUTI,
+};
+
+
 /* global variables */
 int  my_rank;
 int  worldsize;
@@ -78,24 +87,26 @@ struct args {
     uint64_t            ring_ops;
     uint32_t            stride;
     int                 slice;
-    bool                use_geti;
+    enum z_op_types     op_type;
 };
 
 struct stuff {
-    const struct args   *args;
-    struct zhpeq_dom    *zqdom;
-    struct zhpeq_tq     *ztq;                /* client-only */
-    struct zhpeq_rq     *zrq;                /* server only */
-    struct zhpeq_key_data *ztq_local_kdata;  /* server-only */
-    struct zhpeq_key_data *ztq_remote_kdata; /* client-only */
-    uint64_t            ztq_remote_rx_zaddr; /* client-only */
-    void                *rx_addr;            /* server-only */
-    uint64_t            ops_completed;       /* client-only */
-    size_t              ring_entry_aligned;
-    size_t              ring_ops;
-    size_t              ring_len;
-    uint32_t            cmdq_entries;
-    void                *addr_cookie;
+    const struct args       *args;
+    struct zhpeq_dom        *zqdom;
+    struct zhpeq_tq         *ztq;                /* client-only */
+    struct zhpeq_rq         *zrq;                /* server-only */
+    struct zhpeq_key_data   *ztq_local_kdata;
+    struct zhpeq_key_data   *ztq_remote_kdata;   /* client-only */
+    uint64_t                ztq_remote_rx_zaddr; /* client-only */
+    void                    *rx_addr;            /* server-only */
+    void                    *tx_addr;            /* client-only */
+    uint64_t                ops_completed;       /* client-only */
+    uint64_t                data_buffer_aligned;
+    size_t                  ring_entry_aligned;
+    size_t                  ring_ops;
+    size_t                  ring_len;
+    uint32_t                cmdq_entries;
+    void                    *addr_cookie;
 };
 
 
@@ -157,24 +168,56 @@ static void stuff_free(struct stuff *stuff)
     if (!stuff)
         return;
 
-    if (stuff->ztq) {
+    if (stuff->ztq_remote_kdata)
         zhpeq_qkdata_free(stuff->ztq_remote_kdata);
+
+    if (stuff->ztq_local_kdata)
         zhpeq_qkdata_free(stuff->ztq_local_kdata);
-    }
+
+    if (stuff->zrq)
+        zhpeq_rq_free(stuff->zrq);
+
     if (my_rank > 0) {
         zhpeq_domain_remove_addr(stuff->zqdom, stuff->addr_cookie);
-        if (stuff->zrq)
-            zhpeq_rq_free(stuff->zrq);
-    } else {
         zhpeq_tq_free(stuff->ztq);
     }
     zhpeq_domain_free(stuff->zqdom);
 
     if (stuff->rx_addr)
         munmap(stuff->rx_addr, stuff->ring_len * (worldsize - 1));
+
+    if (stuff->tx_addr)
+        munmap(stuff->tx_addr, stuff->ring_len);
+}
+
+static void usage(bool help) __attribute__ ((__noreturn__));
+
+static void usage(bool help)
+{
+    print_usage(
+        help,
+        "Usage:%s [-gp] [-s stride] [-S slice]\n"
+        "    <entry_len> <ring_entries> <op_count>\n"
+        "All sizes may be postfixed with [kmgtKMGT] to specify the"
+        " base units.\n"
+        "Lower case is base 10; upper case is base 2.\n"
+        "All three arguments, one of [-egp] and at least two ranks required.\n"
+        "Options:\n"
+        " -g: use get to transfer data\n"
+        " -p: use put to transfer data\n"
+        " -s <stride>: stride for checking completions\n"
+        " -S <slice number>: slice number from 0-3\n"
+        "",
+        appname);
+
+    if (help)
+        zhpeq_print_tq_info(NULL);
+
+    exit(help ? 0 : 255);
 }
 
 /* server allocates and broadcasts ztq_remote_rx_addr to all clients */
+/* if not immediate, clients allocate and register tx_addr */
 static int do_mem_setup(struct stuff *conn)
 {
     int                 ret;
@@ -190,22 +233,20 @@ static int do_mem_setup(struct stuff *conn)
 
     ret = -EEXIST;
 
-    /* everyone needs this */
+    /* everyone needs to set up ring */
     conn->ring_entry_aligned = (args->ring_entry_len + mask) & ~mask;
     conn->ring_len = conn->ring_entry_aligned * conn->cmdq_entries;
     req = conn->ring_len * (worldsize - 1);
 
-    /* only server sets up rx_addr */
     if (my_rank == 0) {
         conn->rx_addr = mmap( NULL, req, PROT_READ | PROT_WRITE,
                               MAP_ANONYMOUS | MAP_SHARED, -1 , 0);
-
         ret = zhpeq_mr_reg(conn->zqdom, conn->rx_addr, req,
                            (ZHPEQ_MR_GET | ZHPEQ_MR_PUT |
                             ZHPEQ_MR_GET_REMOTE | ZHPEQ_MR_PUT_REMOTE),
                            &conn->ztq_local_kdata);
-
         blob_len = sizeof(blob);
+        /* only server exports ztq_local_kdata */
         ret = zhpeq_qkdata_export(conn->ztq_local_kdata,
                                   conn->ztq_local_kdata->z.access,
                                   blob, &blob_len);
@@ -214,18 +255,24 @@ static int do_mem_setup(struct stuff *conn)
                                ret);
                 goto done;
         }
+        ztq_remote_rx_addr = (uintptr_t)conn->rx_addr;
+    } else if (args->ring_entry_len > ZHPEQ_MAX_IMM) {
+        conn->tx_addr = mmap( NULL, conn->ring_len, PROT_READ | PROT_WRITE,
+                              MAP_ANONYMOUS | MAP_SHARED, -1 , 0);
+        ret = zhpeq_mr_reg(conn->zqdom, conn->tx_addr, conn->ring_len,
+                           (ZHPEQ_MR_GET | ZHPEQ_MR_PUT |
+                            ZHPEQ_MR_GET_REMOTE | ZHPEQ_MR_PUT_REMOTE),
+                           &conn->ztq_local_kdata);
     }
 
     MPI_CALL(MPI_Bcast, blob, ZHPEQ_MAX_KEY_BLOB, MPI_CHAR, 0, MPI_COMM_WORLD);
 
     MPI_CALL(MPI_Bcast, &blob_len, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
 
-    ztq_remote_rx_addr = (uintptr_t)conn->rx_addr;
-
     MPI_CALL(MPI_Bcast, &ztq_remote_rx_addr, 1, MPI_UINT64_T, 0,
              MPI_COMM_WORLD);
 
-    /* only clients set up ztq_remote_rx_addr */
+    /* only clients import ztq_remote_rx_addr */
     if (my_rank > 0) {
         ztq_remote_rx_addr += conn->ring_len * (my_rank - 1);
         ret = zhpeq_qkdata_import(conn->zqdom, conn->addr_cookie,
@@ -251,26 +298,52 @@ static int do_mem_setup(struct stuff *conn)
     }
 
     if (my_rank > 0) {
-        if (args->use_geti) {
-            /* Loop and fill in my commmand buffers with geti commands. */
-            for (i = 0; i < conn->cmdq_entries; i++) {
-                wqe = &conn->ztq->wq[i];
+        /* Loop and fill in all commmand buffers. */
+        for (i = 0; i < conn->cmdq_entries; i++) {
+            wqe = &conn->ztq->wq[i];
+            switch (args->op_type) {
+
+            case ZNONE:
+                usage(true);
+                break;
+
+            case ZGETI:
                 zhpeq_tq_geti(wqe, 0, args->ring_entry_len,
-                       conn->ztq_remote_rx_zaddr+(i*conn->ring_entry_aligned));
-                wqe->hdr.cmp_index = i;
-            }
-        } else {
-            /* Loop and fill in my commmand buffers puti commands. */
-            for (i = 0; i < conn->cmdq_entries; i++) {
-                wqe = &conn->ztq->wq[i];
+                             conn->ztq_remote_rx_zaddr +
+                             (i*conn->ring_entry_aligned));
+                break;
+
+            case ZPUTI:
                 memset(zhpeq_tq_puti(wqe, 0, args->ring_entry_len,
-                       conn->ztq_remote_rx_zaddr+(i*conn->ring_entry_aligned)),
-                       0, args->ring_entry_len);
-                wqe->hdr.cmp_index = i;
+                                    conn->ztq_remote_rx_zaddr +
+                                    (i*conn->ring_entry_aligned)),
+                      0, args->ring_entry_len);
+                break;
+
+            case ZGET:
+                zhpeq_tq_get(wqe, 0,
+                            conn->ztq_local_kdata->z.vaddr +
+                            (i*conn->ring_entry_aligned),
+                            args->ring_entry_len,
+                            conn->ztq_remote_rx_zaddr +
+                            (i*conn->ring_entry_aligned));
+                break;
+
+            case ZPUT:
+                memset(((char *)(conn->tx_addr)+(i*conn->ring_entry_aligned)),
+                      0, args->ring_entry_len);
+                zhpeq_tq_put(wqe, 0,
+                            conn->ztq_local_kdata->z.vaddr +
+                            (i*conn->ring_entry_aligned),
+                            args->ring_entry_len,
+                            conn->ztq_remote_rx_zaddr +
+                            (i*conn->ring_entry_aligned));
+                break;
+
             }
+            wqe->hdr.cmp_index = i;
         }
     }
-
  done:
     return ret;
 }
@@ -403,6 +476,7 @@ int do_queue_setup(struct stuff *conn)
             slice_mask = (1 << args->slice);
         slice_mask |= SLICE_DEMAND;
 
+        assert(conn->zqdom != 0);
         ret = zhpeq_tq_alloc(conn->zqdom, args->ring_entries,
                              args->ring_entries, 0, 0, slice_mask, &conn->ztq);
         if (ret < 0) {
@@ -519,31 +593,6 @@ static int do_client(const struct args *args)
     return ret;
 }
 
-static void usage(bool help) __attribute__ ((__noreturn__));
-
-static void usage(bool help)
-{
-    print_usage(
-        help,
-        "Usage:%s [-g] [-s stride] [-S slice]\n"
-        "    <entry_len> <ring_entries> <op_count>\n"
-        "All sizes may be postfixed with [kmgtKMGT] to specify the"
-        " base units.\n"
-        "Lower case is base 10; upper case is base 2.\n"
-        "All three arguments and at least two ranks required.\n"
-        "Options:\n"
-        " -g: use geti instead of puti to transfer data\n"
-        " -s <stride>: stride for checking completions\n"
-        " -S <slice number>: slice number from 0-3\n"
-        "",
-        appname);
-
-    if (help)
-        zhpeq_print_tq_info(NULL);
-
-    exit(help ? 0 : 255);
-}
-
 int main(int argc, char **argv)
 {
     int                 ret = 1;
@@ -553,10 +602,6 @@ int main(int argc, char **argv)
     int                 opt;
     int                 rc;
     uint64_t            val64;
-
-    MPI_CALL(MPI_Init, &argc,&argv);
-    MPI_CALL(MPI_Comm_rank, MPI_COMM_WORLD, &my_rank);
-    MPI_CALL(MPI_Comm_size, MPI_COMM_WORLD, &worldsize);
 
     zhpeq_util_init(argv[0], LOG_INFO, false);
 
@@ -569,14 +614,25 @@ int main(int argc, char **argv)
     if (argc == 1)
         usage(true);
 
-    while ((opt = getopt(argc, argv, "gs:S:")) != -1) {
+    MPI_CALL(MPI_Init, &argc,&argv);
+    MPI_CALL(MPI_Comm_rank, MPI_COMM_WORLD, &my_rank);
+    MPI_CALL(MPI_Comm_size, MPI_COMM_WORLD, &worldsize);
+
+    args.op_type=ZNONE;
+    while ((opt = getopt(argc, argv, "gps:S:")) != -1) {
 
         switch (opt) {
 
         case 'g':
-            if (args.use_geti)
+            if (args.op_type != ZNONE)
                 usage(false);
-            args.use_geti=true;
+            args.op_type = ZGET;
+            break;
+
+        case 'p':
+            if (args.op_type != ZNONE)
+                usage(false);
+            args.op_type = ZPUT;
             break;
 
         case 's':
@@ -604,6 +660,9 @@ int main(int argc, char **argv)
         }
     }
 
+    if (args.op_type == ZNONE)
+        usage(false);
+
     if (!args.stride)
         args.stride=64;
 
@@ -614,7 +673,7 @@ int main(int argc, char **argv)
 
     if (parse_kb_uint64_t(__func__, __LINE__, "entry_len",
                           argv[optind++], &args.ring_entry_len, 0,
-                          sizeof(uint8_t), ZHPEQ_MAX_IMM,
+                          sizeof(uint8_t), SIZE_MAX,
                           PARSE_KB | PARSE_KIB) < 0 ||
         parse_kb_uint64_t(__func__, __LINE__, "ring_entries",
                           argv[optind++], &args.ring_entries, 0, 1, SIZE_MAX,
@@ -623,6 +682,12 @@ int main(int argc, char **argv)
                           argv[optind++], &args.ring_ops, 0, 1, SIZE_MAX,
                           PARSE_KB | PARSE_KIB) < 0)
         usage(false);
+
+    if ((args.ring_entry_len <= ZHPEQ_MAX_IMM) && (args.op_type == ZGET))
+        args.op_type = ZGETI;
+
+    if ((args.ring_entry_len <= ZHPEQ_MAX_IMM) && (args.op_type == ZPUT))
+        args.op_type = ZPUTI;
 
     if (my_rank == 0) {
         if (do_server(&args) < 0)
